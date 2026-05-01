@@ -1,6 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class UpdatePropertyDto {
   @ApiPropertyOptional()
@@ -25,10 +33,20 @@ export class UpdatePropertyDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  propertyType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   price?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  currency?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -50,6 +68,45 @@ export class UpdatePropertyDto {
   @IsInt()
   @Min(0)
   areaSqFt?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  landAreaSqFt?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  furnishing?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  availability?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  imageUrls?: string[];
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  videoUrls?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  layoutPlanUrl?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

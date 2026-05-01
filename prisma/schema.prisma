@@ -34,21 +34,30 @@ model User {
 }
 
 model Property {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  city        String
-  address     String
-  price       Decimal   @db.Decimal(12, 2)
-  bedrooms    Int
-  bathrooms   Int
-  areaSqFt    Int?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  ownerId     String
-  owner       User      @relation(fields: [ownerId], references: [id])
-  viewings    Viewing[]
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  city         String
+  address      String
+  propertyType String?
+  price        Decimal   @db.Decimal(12, 2)
+  currency     String    @default("GBP")
+  bedrooms     Int
+  bathrooms    Int
+  areaSqFt     Int?
+  landAreaSqFt Int?
+  furnishing   String?
+  availability String?
+  status       String    @default("FOR_SALE")
+  imageUrls    String[]  @default([])
+  videoUrls    String[]  @default([])
+  layoutPlanUrl String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  ownerId      String
+  owner        User      @relation(fields: [ownerId], references: [id])
+  viewings     Viewing[]
 }
 
 model Viewing {
