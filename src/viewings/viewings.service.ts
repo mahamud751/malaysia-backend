@@ -63,6 +63,42 @@ export class ViewingsService {
     });
   }
 
+  /** Full list for admin dashboards (all users’ bookings). */
+  findAllForAdmin() {
+    return this.prisma.viewing.findMany({
+      orderBy: { scheduledAt: 'desc' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            role: true,
+          },
+        },
+        property: {
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            address: true,
+            price: true,
+            currency: true,
+            imageUrls: true,
+            videoUrls: true,
+            bedrooms: true,
+            bathrooms: true,
+            areaSqFt: true,
+            owner: {
+              select: { id: true, fullName: true, phone: true, email: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async updateStatus(id: string, userId: string, dto: UpdateViewingStatusDto) {
     const viewing = await this.prisma.viewing.findUnique({
       where: { id },
