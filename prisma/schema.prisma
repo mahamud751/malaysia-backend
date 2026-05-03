@@ -21,16 +21,17 @@ enum ViewingStatus {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String
-  fullName     String
-  phone        String?
-  role         UserRole   @default(USER)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  properties   Property[]
-  viewings     Viewing[]  @relation("ViewingUser")
+  id              String           @id @default(cuid())
+  email           String           @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  role            UserRole         @default(USER)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  properties      Property[]
+  viewings        Viewing[]        @relation("ViewingUser")
+  savedProperties SavedProperty[]
 }
 
 model Property {
@@ -55,9 +56,10 @@ model Property {
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  ownerId      String
-  owner        User      @relation(fields: [ownerId], references: [id])
-  viewings     Viewing[]
+  ownerId         String
+  owner           User            @relation(fields: [ownerId], references: [id])
+  viewings        Viewing[]
+  savedProperties SavedProperty[]
 }
 
 model Viewing {
@@ -71,4 +73,17 @@ model Viewing {
   propertyId  String
   user        User          @relation("ViewingUser", fields: [userId], references: [id])
   property    Property      @relation(fields: [propertyId], references: [id])
+}
+
+model SavedProperty {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
 }

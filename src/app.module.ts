@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { PropertiesModule } from './properties/properties.module';
 import { ViewingsModule } from './viewings/viewings.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { SavedPropertiesModule } from './saved-properties/saved-properties.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UploadsModule } from './uploads/uploads.module';
     PropertiesModule,
     ViewingsModule,
     UploadsModule,
+    SavedPropertiesModule,
   ],
   controllers: [AppController],
 })
