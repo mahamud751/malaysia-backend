@@ -24,6 +24,7 @@ export class PropertiesController {
   findAll(
     @Query('q') q?: string,
     @Query('propertyType') propertyType?: string,
+    @Query('category') category?: string,
     @Query('city') city?: string,
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
@@ -33,6 +34,7 @@ export class PropertiesController {
     return this.propertiesService.findAll({
       q,
       propertyType,
+      category,
       city,
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,

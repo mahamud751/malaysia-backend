@@ -1,11 +1,23 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 
+/** Home tab labels → keywords matched against `propertyType` (case-insensitive contains). */
+const HOME_CATEGORY_KEYWORDS: Record<string, string[]> = {
+  Residence: ['residence', 'residential', 'condo', 'house'],
+  Apartment: ['apartment'],
+  Villa: ['villa'],
+  Investment: ['investment', 'commercial'],
+};
+
 type FindPropertiesQuery = {
   q?: string;
+  /** Single-type filter (search/filters UI); ignored when `category` is set. */
   propertyType?: string;
+  /** Home screen tab: Residence | Apartment | Villa | Investment */
+  category?: string;
   city?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -18,46 +30,68 @@ export class PropertiesService {
   constructor(private readonly prisma: PrismaService) {}
 
   findAll(query: FindPropertiesQuery = {}) {
-    const { q, propertyType, city, minPrice, maxPrice, bedrooms, bathrooms } = query;
-    const where: Record<string, unknown> = {
-      isActive: true,
-    };
+    const {
+      q,
+      propertyType,
+      category,
+      city,
+      minPrice,
+      maxPrice,
+      bedrooms,
+      bathrooms,
+    } = query;
 
-    if (propertyType && propertyType !== 'All') {
-      where.propertyType = { contains: propertyType, mode: 'insensitive' };
+    const and: Prisma.PropertyWhereInput[] = [{ isActive: true }];
+
+    const categoryKey = category?.trim();
+    if (categoryKey && HOME_CATEGORY_KEYWORDS[categoryKey]?.length) {
+      const keywords = HOME_CATEGORY_KEYWORDS[categoryKey];
+      and.push({
+        OR: keywords.map((k) => ({
+          propertyType: { contains: k, mode: 'insensitive' },
+        })),
+      });
+    } else if (propertyType && propertyType !== 'All') {
+      and.push({
+        propertyType: { contains: propertyType, mode: 'insensitive' },
+      });
     }
+
     if (city) {
-      where.city = { contains: city, mode: 'insensitive' };
+      and.push({ city: { contains: city, mode: 'insensitive' } });
     }
     if (typeof bedrooms === 'number' && Number.isFinite(bedrooms)) {
-      where.bedrooms = { gte: bedrooms };
+      and.push({ bedrooms: { gte: bedrooms } });
     }
     if (typeof bathrooms === 'number' && Number.isFinite(bathrooms)) {
-      where.bathrooms = { gte: bathrooms };
+      and.push({ bathrooms: { gte: bathrooms } });
     }
     if (
       (typeof minPrice === 'number' && Number.isFinite(minPrice)) ||
       (typeof maxPrice === 'number' && Number.isFinite(maxPrice))
     ) {
-      where.price = {};
+      const priceFilter: Prisma.DecimalFilter = {};
       if (typeof minPrice === 'number' && Number.isFinite(minPrice)) {
-        (where.price as Record<string, number>).gte = minPrice;
+        priceFilter.gte = minPrice;
       }
       if (typeof maxPrice === 'number' && Number.isFinite(maxPrice)) {
-        (where.price as Record<string, number>).lte = maxPrice;
+        priceFilter.lte = maxPrice;
       }
+      and.push({ price: priceFilter });
     }
     if (q) {
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { address: { contains: q, mode: 'insensitive' } },
-        { city: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
-      ];
+      and.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { address: { contains: q, mode: 'insensitive' } },
+          { city: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+        ],
+      });
     }
 
     return this.prisma.property.findMany({
-      where,
+      where: { AND: and },
       include: {
         owner: {
           select: { id: true, fullName: true, email: true },
