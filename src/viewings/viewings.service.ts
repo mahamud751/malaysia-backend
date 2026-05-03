@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ViewingStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateViewingDto } from './dto/create-viewing.dto';
 import { UpdateViewingStatusDto } from './dto/update-viewing-status.dto';
@@ -7,13 +8,30 @@ import { UpdateViewingStatusDto } from './dto/update-viewing-status.dto';
 export class ViewingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(userId: string, dto: CreateViewingDto) {
+  async create(userId: string, dto: CreateViewingDto) {
+    const property = await this.prisma.property.findUnique({
+      where: { id: dto.propertyId },
+    });
+    if (!property || !property.isActive) {
+      throw new NotFoundException('Property is not available for booking');
+    }
+
     return this.prisma.viewing.create({
       data: {
         userId,
         propertyId: dto.propertyId,
         scheduledAt: new Date(dto.scheduledAt),
         notes: dto.notes,
+        status: ViewingStatus.CONFIRMED,
+      },
+      include: {
+        property: {
+          include: {
+            owner: {
+              select: { id: true, fullName: true, phone: true, email: true },
+            },
+          },
+        },
       },
     });
   }
@@ -23,7 +41,22 @@ export class ViewingsService {
       where: { userId },
       include: {
         property: {
-          select: { id: true, title: true, city: true, price: true },
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            address: true,
+            price: true,
+            currency: true,
+            imageUrls: true,
+            videoUrls: true,
+            bedrooms: true,
+            bathrooms: true,
+            areaSqFt: true,
+            owner: {
+              select: { id: true, fullName: true, phone: true, email: true },
+            },
+          },
         },
       },
       orderBy: { scheduledAt: 'asc' },
