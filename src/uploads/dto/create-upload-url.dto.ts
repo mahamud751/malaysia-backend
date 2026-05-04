@@ -3,9 +3,9 @@ import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreateUploadUrlDto {
-  @ApiProperty({ enum: ['photo', 'video', 'pdf'] })
-  @IsIn(['photo', 'video', 'pdf'])
-  kind: 'photo' | 'video' | 'pdf';
+  @ApiProperty({ enum: ['photo', 'video', 'pdf', 'audio', 'document'] })
+  @IsIn(['photo', 'video', 'pdf', 'audio', 'document'])
+  kind: 'photo' | 'video' | 'pdf' | 'audio' | 'document';
 
   @ApiProperty()
   @IsString()

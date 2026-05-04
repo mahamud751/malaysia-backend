@@ -8,6 +8,33 @@ import { PrismaService } from '../common/prisma/prisma.service';
 
 const MAX_MESSAGE_LEN = 4000;
 
+export type ChatMessagePayload = {
+  body?: string;
+  messageType?: 'text' | 'image' | 'file' | 'voice';
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentMime?: string;
+  attachmentSizeBytes?: number;
+  durationSec?: number;
+};
+
+function inboxPreview(m: {
+  body: string;
+  messageType: string;
+  attachmentName: string | null;
+}): string {
+  switch (m.messageType) {
+    case 'image':
+      return '📷 Photo';
+    case 'voice':
+      return '🎤 Voice message';
+    case 'file':
+      return m.attachmentName ? `📎 ${m.attachmentName}` : '📎 File';
+    default:
+      return m.body || '';
+  }
+}
+
 @Injectable()
 export class ChatsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -142,7 +169,13 @@ export class ChatsService {
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { body: true, createdAt: true, senderId: true },
+          select: {
+            body: true,
+            createdAt: true,
+            senderId: true,
+            messageType: true,
+            attachmentName: true,
+          },
         },
       },
     });
@@ -161,7 +194,13 @@ export class ChatsService {
         row.clientId === userId
           ? row.owner
           : row.client,
-      lastMessage: row.messages[0] ?? null,
+      lastMessage: row.messages[0]
+        ? {
+            body: inboxPreview(row.messages[0]),
+            messageType: row.messages[0].messageType,
+            createdAt: row.messages[0].createdAt,
+          }
+        : null,
       updatedAt: row.updatedAt,
     }));
   }
@@ -193,13 +232,34 @@ export class ChatsService {
     });
   }
 
-  async createMessage(threadId: string, senderId: string, body: string) {
-    const trimmed = body?.trim() ?? '';
-    if (!trimmed) {
-      throw new BadRequestException('Message cannot be empty');
-    }
-    if (trimmed.length > MAX_MESSAGE_LEN) {
-      throw new BadRequestException(`Message too long (max ${MAX_MESSAGE_LEN} characters)`);
+  async createMessage(
+    threadId: string,
+    senderId: string,
+    payload: string | ChatMessagePayload,
+  ) {
+    const input: ChatMessagePayload =
+      typeof payload === 'string'
+        ? { body: payload, messageType: 'text' }
+        : { ...payload };
+
+    const messageType = input.messageType ?? 'text';
+    const body = (input.body ?? '').trim();
+
+    if (messageType === 'text') {
+      if (!body) {
+        throw new BadRequestException('Message cannot be empty');
+      }
+      if (body.length > MAX_MESSAGE_LEN) {
+        throw new BadRequestException(`Message too long (max ${MAX_MESSAGE_LEN} characters)`);
+      }
+    } else {
+      const url = input.attachmentUrl?.trim();
+      if (!url) {
+        throw new BadRequestException('Attachment URL is required for this message type');
+      }
+      if (body.length > MAX_MESSAGE_LEN) {
+        throw new BadRequestException(`Caption too long (max ${MAX_MESSAGE_LEN} characters)`);
+      }
     }
 
     await this.assertThreadMember(threadId, senderId);
@@ -207,8 +267,15 @@ export class ChatsService {
     const msg = await this.prisma.propertyChatMessage.create({
       data: {
         threadId,
-        senderId: senderId,
-        body: trimmed,
+        senderId,
+        body,
+        messageType,
+        attachmentUrl: input.attachmentUrl?.trim() || null,
+        attachmentName: input.attachmentName?.trim() || null,
+        attachmentMime: input.attachmentMime?.trim() || null,
+        attachmentSizeBytes:
+          typeof input.attachmentSizeBytes === 'number' ? input.attachmentSizeBytes : null,
+        durationSec: typeof input.durationSec === 'number' ? input.durationSec : null,
       },
       include: {
         sender: {

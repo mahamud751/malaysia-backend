@@ -87,13 +87,19 @@ model PropertyChatThread {
 }
 
 model PropertyChatMessage {
-  id        String   @id @default(cuid())
-  threadId  String
-  senderId  String
-  body      String
-  createdAt DateTime @default(now())
-  thread    PropertyChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  sender    User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  threadId             String
+  senderId             String
+  body                 String   @default("")
+  messageType          String   @default("text")
+  attachmentUrl        String?
+  attachmentName       String?
+  attachmentMime       String?
+  attachmentSizeBytes  Int?
+  durationSec          Int?
+  createdAt            DateTime @default(now())
+  thread               PropertyChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender               User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
 }

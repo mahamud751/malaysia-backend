@@ -6,18 +6,40 @@ import { randomUUID } from 'crypto';
 import { extname } from 'path';
 import { CreateUploadUrlDto } from './dto/create-upload-url.dto';
 
-type UploadKind = 'photo' | 'video' | 'pdf';
+type UploadKind = 'photo' | 'video' | 'pdf' | 'audio' | 'document';
 
 const MIME_WHITELIST: Record<UploadKind, string[]> = {
   photo: ['image/jpeg', 'image/png', 'image/webp', 'image/heic'],
   video: ['video/mp4', 'video/quicktime', 'video/webm'],
   pdf: ['application/pdf'],
+  audio: [
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/mp3',
+    'audio/aac',
+    'audio/x-m4a',
+    'audio/m4a',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/webm',
+    'audio/ogg',
+  ],
+  document: [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+  ],
 };
 
 const MAX_SIZE_BYTES: Record<UploadKind, number> = {
   photo: 15 * 1024 * 1024,
   video: 300 * 1024 * 1024,
   pdf: 12 * 1024 * 1024,
+  audio: 25 * 1024 * 1024,
+  document: 25 * 1024 * 1024,
 };
 
 @Injectable()
@@ -59,10 +81,14 @@ export class UploadsService {
       this.configService.get<string>('ALLOWED_PDF_TYPES'),
       MIME_WHITELIST.pdf,
     );
+    const audioTypes = this.parseList(undefined, MIME_WHITELIST.audio);
+    const documentTypes = this.parseList(undefined, MIME_WHITELIST.document);
     this.allowedTypes = {
       photo: imageTypes,
       video: videoTypes,
       pdf: pdfTypes,
+      audio: audioTypes,
+      document: documentTypes,
     };
     this.maxUploadBytes = Number(this.configService.get<string>('MAX_FILE_SIZE') ?? 524288000);
 
@@ -109,7 +135,9 @@ export class UploadsService {
     }
 
     const safeExt = extname(cleanFileName).replace(/[^a-zA-Z0-9.]/g, '') || '';
-    const key = `${kind}s/${userId}/${Date.now()}-${randomUUID()}${safeExt}`;
+    const folder =
+      kind === 'document' ? 'documents' : kind === 'audio' ? 'audio' : `${kind}s`;
+    const key = `${folder}/${userId}/${Date.now()}-${randomUUID()}${safeExt}`;
 
     const command = new PutObjectCommand({
       Bucket: this.bucket,
