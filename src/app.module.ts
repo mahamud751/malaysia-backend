@@ -8,6 +8,7 @@ import { PropertiesModule } from './properties/properties.module';
 import { ViewingsModule } from './viewings/viewings.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { SavedPropertiesModule } from './saved-properties/saved-properties.module';
+import { ChatsModule } from './chats/chats.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SavedPropertiesModule } from './saved-properties/saved-properties.modul
     ViewingsModule,
     UploadsModule,
     SavedPropertiesModule,
+    ChatsModule,
   ],
   controllers: [AppController],
 })

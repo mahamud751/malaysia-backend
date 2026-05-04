@@ -106,7 +106,13 @@ export class PropertiesService {
       where: { id },
       include: {
         owner: {
-          select: { id: true, fullName: true, email: true },
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            profileImageUrl: true,
+            phone: true,
+          },
         },
       },
     });

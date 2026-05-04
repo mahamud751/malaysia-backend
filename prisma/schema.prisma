@@ -36,6 +36,9 @@ model User {
   properties      Property[]
   viewings        Viewing[]        @relation("ViewingUser")
   savedProperties SavedProperty[]
+  chatThreadsAsClient PropertyChatThread[] @relation("ChatThreadClient")
+  chatThreadsAsOwner  PropertyChatThread[] @relation("ChatThreadOwner")
+  chatMessages        PropertyChatMessage[]
 }
 
 model Property {
@@ -64,6 +67,35 @@ model Property {
   owner           User            @relation(fields: [ownerId], references: [id])
   viewings        Viewing[]
   savedProperties SavedProperty[]
+  chatThreads       PropertyChatThread[]
+}
+
+model PropertyChatThread {
+  id         String   @id @default(cuid())
+  propertyId String
+  clientId   String
+  ownerId    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  client     User     @relation("ChatThreadClient", fields: [clientId], references: [id], onDelete: Cascade)
+  owner      User     @relation("ChatThreadOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  messages   PropertyChatMessage[]
+
+  @@unique([propertyId, clientId])
+  @@index([ownerId])
+}
+
+model PropertyChatMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+  thread    PropertyChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
 }
 
 model Viewing {
