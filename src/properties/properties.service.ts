@@ -41,7 +41,10 @@ export class PropertiesService {
       bathrooms,
     } = query;
 
-    const and: Prisma.PropertyWhereInput[] = [{ isActive: true }];
+    const and: Prisma.PropertyWhereInput[] = [
+      { isActive: true },
+      { approvalStatus: 'ACTIVE' },
+    ];
 
     const categoryKey = category?.trim();
     if (categoryKey && HOME_CATEGORY_KEYWORDS[categoryKey]?.length) {
@@ -94,7 +97,19 @@ export class PropertiesService {
       where: { AND: and },
       include: {
         owner: {
-          select: { id: true, fullName: true, email: true },
+          select: { id: true, fullName: true, email: true, profileImageUrl: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  findMine(ownerId: string) {
+    return this.prisma.property.findMany({
+      where: { ownerId },
+      include: {
+        owner: {
+          select: { id: true, fullName: true, email: true, profileImageUrl: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -124,25 +139,58 @@ export class PropertiesService {
         ...dto,
         price: Number(dto.price),
         ownerId,
+        approvalStatus: 'PENDING',
       },
     });
   }
 
-  async update(id: string, ownerId: string, dto: UpdatePropertyDto) {
+  async update(
+    id: string,
+    user: { id: string; role?: string },
+    dto: UpdatePropertyDto,
+  ) {
     const existing = await this.prisma.property.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Property not found');
     }
-    if (existing.ownerId !== ownerId) {
+    const isAdmin = user.role === 'ADMIN';
+    if (existing.ownerId !== user.id && !isAdmin) {
       throw new ForbiddenException('You can only update your own property');
+    }
+
+    const nextData: Prisma.PropertyUpdateInput = {
+      ...dto,
+      ...(dto.price !== undefined ? { price: Number(dto.price) } : {}),
+    };
+
+    // If owner edits listing after rejection/active, put it back under review.
+    if (!isAdmin && existing.approvalStatus !== 'PENDING') {
+      nextData.approvalStatus = 'PENDING';
     }
 
     return this.prisma.property.update({
       where: { id },
-      data: {
-        ...dto,
-        ...(dto.price !== undefined ? { price: Number(dto.price) } : {}),
-      },
+      data: nextData,
+    });
+  }
+
+  async updateApprovalStatus(
+    id: string,
+    user: { id: string; role?: string },
+    approvalStatus: 'PENDING' | 'ACTIVE' | 'REJECTED',
+  ) {
+    if (user.role !== 'ADMIN') {
+      throw new ForbiddenException('Only admin can change approval status');
+    }
+
+    const existing = await this.prisma.property.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Property not found');
+    }
+
+    return this.prisma.property.update({
+      where: { id },
+      data: { approvalStatus },
     });
   }
 }

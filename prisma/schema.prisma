@@ -57,6 +57,7 @@ model Property {
   furnishing   String?
   availability String?
   status       String    @default("FOR_SALE")
+  approvalStatus String  @default("PENDING")
   imageUrls    String[]  @default([])
   videoUrls    String[]  @default([])
   layoutPlanUrl String?

@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreatePropertyDto } from './dto/create-property.dto';
+import { UpdatePropertyApprovalDto } from './dto/update-property-approval.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { PropertiesService } from './properties.service';
 
@@ -43,6 +44,13 @@ export class PropertiesController {
     });
   }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('mine')
+  findMine(@CurrentUser() user: { id: string }) {
+    return this.propertiesService.findMine(user.id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.propertiesService.findOne(id);
@@ -57,12 +65,23 @@ export class PropertiesController {
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
+  @Patch(':id/approval-status')
+  updateApprovalStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role?: string },
+    @Body() dto: UpdatePropertyApprovalDto,
+  ) {
+    return this.propertiesService.updateApprovalStatus(id, user, dto.approvalStatus);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
   update(
     @Param('id') id: string,
-    @CurrentUser() user: { id: string },
+    @CurrentUser() user: { id: string; role?: string },
     @Body() dto: UpdatePropertyDto,
   ) {
-    return this.propertiesService.update(id, user.id, dto);
+    return this.propertiesService.update(id, user, dto);
   }
 }
