@@ -13,6 +13,26 @@ export class UpdateUserDto {
   @IsString()
   phone?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  agencyName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cityOrArea?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reraLicenseNumber?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  profileImageUrl?: string;
+
   @ApiPropertyOptional({ enum: UserRole })
   @IsOptional()
   @IsEnum(UserRole)

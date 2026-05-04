@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -38,7 +38,7 @@ export class AuthService {
       },
     });
 
-    return this.signUser(user.id, user.email, user.role);
+    return this.signUser(user.id);
   }
 
   async login(dto: LoginDto) {
@@ -54,20 +54,42 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.signUser(user.id, user.email, user.role);
+    return this.signUser(user.id);
   }
 
-  private async signUser(userId: string, email: string, role: UserRole) {
-    const payload = { sub: userId, email, role };
-    const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('JWT_SECRET'),
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '7d',
+  private async signUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        agencyName: true,
+        cityOrArea: true,
+        reraLicenseNumber: true,
+        profileImageUrl: true,
+        createdAt: true,
+      },
     });
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    const payload = { sub: user.id, email: user.email, role: user.role };
+    const expiresRaw =
+      this.configService.get<string>('JWT_EXPIRES_IN') ?? ('7d' as const);
+    const signOptions: JwtSignOptions = {
+      secret: this.configService.get<string>('JWT_SECRET')!,
+      expiresIn: expiresRaw as JwtSignOptions['expiresIn'],
+    };
+    const accessToken = await this.jwtService.signAsync(payload, signOptions);
 
     return {
       accessToken,
       tokenType: 'Bearer',
-      user: { id: userId, email, role },
+      user,
     };
   }
 }

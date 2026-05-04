@@ -21,14 +21,18 @@ enum ViewingStatus {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  passwordHash    String
-  fullName        String
-  phone           String?
-  role            UserRole         @default(USER)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  fullName          String
+  phone             String?
+  role              UserRole  @default(USER)
+  agencyName        String?
+  cityOrArea        String?
+  reraLicenseNumber String?
+  profileImageUrl   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   properties      Property[]
   viewings        Viewing[]        @relation("ViewingUser")
   savedProperties SavedProperty[]

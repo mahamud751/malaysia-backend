@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -15,6 +16,16 @@ export class UsersController {
   @Get()
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get('me')
+  findMe(@CurrentUser() user: { id: string }) {
+    return this.usersService.findOne(user.id);
+  }
+
+  @Patch('me')
+  updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateUserDto) {
+    return this.usersService.update(user.id, dto);
   }
 
   @Get(':id')

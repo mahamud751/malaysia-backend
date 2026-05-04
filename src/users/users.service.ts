@@ -17,6 +17,10 @@ export class UsersService {
         fullName: true,
         phone: true,
         role: true,
+        agencyName: true,
+        cityOrArea: true,
+        reraLicenseNumber: true,
+        profileImageUrl: true,
         createdAt: true,
       },
     });
@@ -31,6 +35,10 @@ export class UsersService {
         fullName: true,
         phone: true,
         role: true,
+        agencyName: true,
+        cityOrArea: true,
+        reraLicenseNumber: true,
+        profileImageUrl: true,
         createdAt: true,
       },
     });
@@ -52,6 +60,10 @@ export class UsersService {
         fullName: true,
         phone: true,
         role: true,
+        agencyName: true,
+        cityOrArea: true,
+        reraLicenseNumber: true,
+        profileImageUrl: true,
         createdAt: true,
       },
     });
@@ -72,6 +84,10 @@ export class UsersService {
         fullName: true,
         phone: true,
         role: true,
+        agencyName: true,
+        cityOrArea: true,
+        reraLicenseNumber: true,
+        profileImageUrl: true,
         createdAt: true,
       },
     });
