@@ -116,6 +116,22 @@ export class PropertiesService {
     });
   }
 
+  findByOwner(ownerId: string) {
+    return this.prisma.property.findMany({
+      where: {
+        ownerId,
+        isActive: true,
+        approvalStatus: 'ACTIVE',
+      },
+      include: {
+        owner: {
+          select: { id: true, fullName: true, email: true, profileImageUrl: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   findOne(id: string) {
     return this.prisma.property.findUnique({
       where: { id },

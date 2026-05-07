@@ -70,6 +70,10 @@ export class AuthService {
         cityOrArea: true,
         reraLicenseNumber: true,
         profileImageUrl: true,
+        about: true,
+        responseTime: true,
+        languages: true,
+        specializations: true,
         createdAt: true,
       },
     });

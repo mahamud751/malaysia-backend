@@ -21,6 +21,10 @@ export class UsersService {
         cityOrArea: true,
         reraLicenseNumber: true,
         profileImageUrl: true,
+        about: true,
+        responseTime: true,
+        languages: true,
+        specializations: true,
         createdAt: true,
       },
     });
@@ -39,6 +43,10 @@ export class UsersService {
         cityOrArea: true,
         reraLicenseNumber: true,
         profileImageUrl: true,
+        about: true,
+        responseTime: true,
+        languages: true,
+        specializations: true,
         createdAt: true,
       },
     });
@@ -64,6 +72,10 @@ export class UsersService {
         cityOrArea: true,
         reraLicenseNumber: true,
         profileImageUrl: true,
+        about: true,
+        responseTime: true,
+        languages: true,
+        specializations: true,
         createdAt: true,
       },
     });
@@ -88,6 +100,10 @@ export class UsersService {
         cityOrArea: true,
         reraLicenseNumber: true,
         profileImageUrl: true,
+        about: true,
+        responseTime: true,
+        languages: true,
+        specializations: true,
         createdAt: true,
       },
     });

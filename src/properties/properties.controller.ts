@@ -51,6 +51,11 @@ export class PropertiesController {
     return this.propertiesService.findMine(user.id);
   }
 
+  @Get('owner/:ownerId')
+  findByOwner(@Param('ownerId') ownerId: string) {
+    return this.propertiesService.findByOwner(ownerId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.propertiesService.findOne(id);

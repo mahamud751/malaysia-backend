@@ -31,6 +31,10 @@ model User {
   cityOrArea        String?
   reraLicenseNumber String?
   profileImageUrl   String?
+  about             String?
+  responseTime      String?
+  languages         String[]  @default([])
+  specializations   String[]  @default([])
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   properties      Property[]
