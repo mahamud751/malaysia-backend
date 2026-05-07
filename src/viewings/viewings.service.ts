@@ -29,7 +29,7 @@ export class ViewingsService {
         property: {
           include: {
             owner: {
-              select: { id: true, fullName: true, phone: true, email: true },
+              select: { id: true, fullName: true, phone: true, email: true, profileImageUrl: true },
             },
           },
         },
@@ -55,7 +55,7 @@ export class ViewingsService {
             bathrooms: true,
             areaSqFt: true,
             owner: {
-              select: { id: true, fullName: true, phone: true, email: true },
+              select: { id: true, fullName: true, phone: true, email: true, profileImageUrl: true },
             },
           },
         },
@@ -76,6 +76,7 @@ export class ViewingsService {
             fullName: true,
             phone: true,
             role: true,
+            profileImageUrl: true,
           },
         },
         property: {
@@ -92,7 +93,7 @@ export class ViewingsService {
             bathrooms: true,
             areaSqFt: true,
             owner: {
-              select: { id: true, fullName: true, phone: true, email: true },
+              select: { id: true, fullName: true, phone: true, email: true, profileImageUrl: true },
             },
           },
         },
@@ -117,6 +118,7 @@ export class ViewingsService {
             fullName: true,
             phone: true,
             role: true,
+            profileImageUrl: true,
           },
         },
         property: {
@@ -134,7 +136,7 @@ export class ViewingsService {
             bathrooms: true,
             areaSqFt: true,
             owner: {
-              select: { id: true, fullName: true, phone: true, email: true },
+              select: { id: true, fullName: true, phone: true, email: true, profileImageUrl: true },
             },
           },
         },
