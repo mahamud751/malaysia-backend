@@ -104,6 +104,49 @@ export class PropertiesService {
     });
   }
 
+  async findAllForAdmin(pageRaw: number, pageSizeRaw: number, q?: string) {
+    const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
+    const pageSize =
+      Number.isFinite(pageSizeRaw) && pageSizeRaw > 0
+        ? Math.min(100, Math.floor(pageSizeRaw))
+        : 10;
+    const skip = (page - 1) * pageSize;
+
+    const where: Prisma.PropertyWhereInput = q
+      ? {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { address: { contains: q, mode: 'insensitive' } },
+            { city: { contains: q, mode: 'insensitive' } },
+            { propertyType: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+
+    const [total, items] = await Promise.all([
+      this.prisma.property.count({ where }),
+      this.prisma.property.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              profileImageUrl: true,
+              agencyName: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return { items, total, page, pageSize };
+  }
+
   findMine(ownerId: string) {
     return this.prisma.property.findMany({
       where: { ownerId },

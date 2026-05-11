@@ -1,16 +1,21 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyApprovalDto } from './dto/update-property-approval.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
@@ -20,6 +25,19 @@ import { PropertiesService } from './properties.service';
 @Controller('properties')
 export class PropertiesController {
   constructor(private readonly propertiesService: PropertiesService) {}
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Get('admin/all')
+  @ApiOperation({ summary: 'Paginated properties for admin (all statuses)' })
+  findAllForAdmin(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('pageSize', new DefaultValuePipe(10), ParseIntPipe) pageSize: number,
+    @Query('q') q?: string,
+  ) {
+    return this.propertiesService.findAllForAdmin(page, pageSize, q);
+  }
 
   @Get()
   findAll(
