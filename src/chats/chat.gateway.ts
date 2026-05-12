@@ -67,7 +67,8 @@ export class ChatGateway implements OnGatewayConnection {
       return { ok: false, error: 'threadId required' };
     }
     try {
-      await this.chatsService.assertThreadMember(threadId, userId);
+      const role = await this.chatsService.getUserRoleForChat(userId);
+      await this.chatsService.assertThreadMember(threadId, userId, role);
       await client.join(this.roomName(threadId));
       return { ok: true };
     } catch (e) {

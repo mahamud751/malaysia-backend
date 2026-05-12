@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -64,6 +64,45 @@ export class UsersService {
     });
 
     return { items, total, page, pageSize };
+  }
+
+  /** Users and agents for admin messaging directory (excludes other admins). */
+  async findPeersForAdmin(q?: string) {
+    const base: Prisma.UserWhereInput = {
+      role: { in: [UserRole.USER, UserRole.AGENT] },
+    };
+    const trimmed = q?.trim();
+    const where: Prisma.UserWhereInput = trimmed
+      ? {
+          AND: [
+            base,
+            {
+              OR: [
+                { fullName: { contains: trimmed, mode: 'insensitive' } },
+                { email: { contains: trimmed, mode: 'insensitive' } },
+                { phone: { contains: trimmed, mode: 'insensitive' } },
+                { agencyName: { contains: trimmed, mode: 'insensitive' } },
+              ],
+            },
+          ],
+        }
+      : base;
+
+    return this.prisma.user.findMany({
+      where,
+      orderBy: [{ fullName: 'asc' }],
+      take: 500,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        agencyName: true,
+        cityOrArea: true,
+        profileImageUrl: true,
+      },
+    });
   }
 
   findAll() {

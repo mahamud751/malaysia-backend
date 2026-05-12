@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 const MAX_MESSAGE_LEN = 4000;
@@ -38,6 +39,76 @@ function inboxPreview(m: {
 @Injectable()
 export class ChatsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private readonly ADMIN_HUB_TITLE = '__ADMIN_MESSAGE_HUB__';
+
+  async getUserRoleForChat(userId: string): Promise<string | undefined> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    return u?.role;
+  }
+
+  /** Admin-only: open or resume a 1:1 thread with a user or agent (uses a hidden hub property). */
+  async adminOpenThreadWith(adminId: string, participantId: string) {
+    if (adminId === participantId) {
+      throw new BadRequestException('Cannot chat with yourself');
+    }
+    const [admin, participant] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: adminId } }),
+      this.prisma.user.findUnique({ where: { id: participantId } }),
+    ]);
+    if (!admin || admin.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only administrators can start admin chats');
+    }
+    if (!participant) {
+      throw new NotFoundException('User not found');
+    }
+    if (participant.role === UserRole.ADMIN) {
+      throw new BadRequestException('Cannot start a chat with another administrator');
+    }
+    if (participant.role !== UserRole.USER && participant.role !== UserRole.AGENT) {
+      throw new BadRequestException('You can only message users or agents');
+    }
+
+    let hub = await this.prisma.property.findFirst({
+      where: { ownerId: adminId, title: this.ADMIN_HUB_TITLE },
+    });
+    if (!hub) {
+      hub = await this.prisma.property.create({
+        data: {
+          title: this.ADMIN_HUB_TITLE,
+          description: 'Internal record for admin ↔ user messages (not a public listing).',
+          city: '—',
+          address: '—',
+          propertyType: 'System',
+          price: 0,
+          currency: 'GBP',
+          bedrooms: 0,
+          bathrooms: 0,
+          ownerId: adminId,
+          isActive: false,
+          approvalStatus: 'REJECTED',
+          status: 'FOR_SALE',
+        },
+      });
+    }
+
+    const thread = await this.prisma.propertyChatThread.upsert({
+      where: {
+        propertyId_clientId: { propertyId: hub.id, clientId: participantId },
+      },
+      create: {
+        propertyId: hub.id,
+        clientId: participantId,
+        ownerId: adminId,
+      },
+      update: {},
+    });
+
+    return this.getThreadContext(thread.id, adminId, UserRole.ADMIN);
+  }
 
   async joinOrCreatePropertyThread(userId: string, propertyId: string) {
     const property = await this.prisma.property.findUnique({
@@ -105,7 +176,7 @@ export class ChatsService {
     };
   }
 
-  async getThreadContext(threadId: string, userId: string) {
+  async getThreadContext(threadId: string, userId: string, role?: string) {
     const thread = await this.prisma.propertyChatThread.findUnique({
       where: { id: threadId },
       include: {
@@ -121,7 +192,8 @@ export class ChatsService {
     if (!thread) {
       throw new NotFoundException('Chat thread not found');
     }
-    if (thread.clientId !== userId && thread.ownerId !== userId) {
+    const isAdmin = role === 'ADMIN';
+    if (!isAdmin && thread.clientId !== userId && thread.ownerId !== userId) {
       throw new ForbiddenException('You are not part of this conversation');
     }
 
@@ -134,7 +206,7 @@ export class ChatsService {
       threadId: thread.id,
       property: {
         id: p.id,
-        title: p.title,
+        title: p.title === this.ADMIN_HUB_TITLE ? 'Direct message' : p.title,
         city: p.city,
         currency: p.currency,
         price: p.price.toString(),
@@ -205,21 +277,22 @@ export class ChatsService {
     }));
   }
 
-  async assertThreadMember(threadId: string, userId: string) {
+  async assertThreadMember(threadId: string, userId: string, role?: string) {
     const thread = await this.prisma.propertyChatThread.findUnique({
       where: { id: threadId },
     });
     if (!thread) {
       throw new NotFoundException('Chat thread not found');
     }
-    if (thread.clientId !== userId && thread.ownerId !== userId) {
+    const isAdmin = role === 'ADMIN';
+    if (!isAdmin && thread.clientId !== userId && thread.ownerId !== userId) {
       throw new ForbiddenException('You are not part of this conversation');
     }
     return thread;
   }
 
-  async listMessages(threadId: string, userId: string) {
-    await this.assertThreadMember(threadId, userId);
+  async listMessages(threadId: string, userId: string, role?: string) {
+    await this.assertThreadMember(threadId, userId, role);
     return this.prisma.propertyChatMessage.findMany({
       where: { threadId },
       orderBy: { createdAt: 'asc' },
@@ -230,6 +303,64 @@ export class ChatsService {
         },
       },
     });
+  }
+
+  /** Admin-only: list all chat threads in the system. */
+  async listAllThreadsForAdmin() {
+    const rows = await this.prisma.propertyChatThread.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      include: {
+        property: {
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            currency: true,
+            price: true,
+            imageUrls: true,
+          },
+        },
+        client: { select: { id: true, fullName: true, profileImageUrl: true, email: true } },
+        owner: { select: { id: true, fullName: true, profileImageUrl: true, email: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            body: true,
+            createdAt: true,
+            senderId: true,
+            messageType: true,
+            attachmentName: true,
+          },
+        },
+        _count: { select: { messages: true } },
+      },
+    });
+
+    return rows.map((row) => ({
+      threadId: row.id,
+      property: {
+        id: row.property.id,
+        title: row.property.title,
+        city: row.property.city,
+        currency: row.property.currency,
+        price: row.property.price.toString(),
+        imageUrls: row.property.imageUrls ?? [],
+      },
+      client: row.client,
+      owner: row.owner,
+      lastMessage: row.messages[0]
+        ? {
+            body: inboxPreview(row.messages[0]),
+            messageType: row.messages[0].messageType,
+            createdAt: row.messages[0].createdAt,
+            senderId: row.messages[0].senderId,
+          }
+        : null,
+      messageCount: row._count.messages,
+      updatedAt: row.updatedAt,
+    }));
   }
 
   async createMessage(
@@ -262,7 +393,11 @@ export class ChatsService {
       }
     }
 
-    await this.assertThreadMember(threadId, senderId);
+    const sender = await this.prisma.user.findUnique({
+      where: { id: senderId },
+      select: { role: true },
+    });
+    await this.assertThreadMember(threadId, senderId, sender?.role);
 
     const msg = await this.prisma.propertyChatMessage.create({
       data: {

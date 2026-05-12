@@ -53,6 +53,14 @@ export class UsersController {
     return this.usersService.findAgentsForAdmin(page, pageSize);
   }
 
+  @Get('admin/peers')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Directory of users and agents for admin messaging (admin only)' })
+  findPeersForAdmin(@Query('q') q?: string) {
+    return this.usersService.findPeersForAdmin(q);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
