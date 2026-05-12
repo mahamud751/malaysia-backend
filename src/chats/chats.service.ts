@@ -182,7 +182,7 @@ export class ChatsService {
       include: {
         property: true,
         client: {
-          select: { id: true, fullName: true, profileImageUrl: true },
+          select: { id: true, fullName: true, profileImageUrl: true, email: true, phone: true },
         },
         owner: {
           select: { id: true, fullName: true, profileImageUrl: true, email: true, phone: true },
