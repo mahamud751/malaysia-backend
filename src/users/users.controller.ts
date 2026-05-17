@@ -69,6 +69,15 @@ export class UsersController {
     return this.usersService.getProfileInsights(id);
   }
 
+  @Get(':id/agent-analytics')
+  @ApiOperation({ summary: 'Agent dashboard analytics for a date range' })
+  getAgentAnalytics(
+    @Param('id') id: string,
+    @Query('days', new DefaultValuePipe(30), ParseIntPipe) days: number,
+  ) {
+    return this.usersService.getAgentAnalytics(id, days);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);

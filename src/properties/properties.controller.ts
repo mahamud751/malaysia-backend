@@ -49,6 +49,8 @@ export class PropertiesController {
     @Query('maxPrice') maxPrice?: string,
     @Query('bedrooms') bedrooms?: string,
     @Query('bathrooms') bathrooms?: string,
+    @Query('status') status?: string,
+    @Query('sort') sort?: string,
   ) {
     return this.propertiesService.findAll({
       q,
@@ -59,6 +61,8 @@ export class PropertiesController {
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       bedrooms: bedrooms ? Number(bedrooms) : undefined,
       bathrooms: bathrooms ? Number(bathrooms) : undefined,
+      status,
+      sort,
     });
   }
 

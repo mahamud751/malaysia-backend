@@ -23,6 +23,10 @@ type FindPropertiesQuery = {
   maxPrice?: number;
   bedrooms?: number;
   bathrooms?: number;
+  /** e.g. FOR_SALE */
+  status?: string;
+  /** latest | price_asc | price_desc */
+  sort?: string;
 };
 
 @Injectable()
@@ -39,6 +43,8 @@ export class PropertiesService {
       maxPrice,
       bedrooms,
       bathrooms,
+      status,
+      sort,
     } = query;
 
     const and: Prisma.PropertyWhereInput[] = [
@@ -54,10 +60,17 @@ export class PropertiesService {
           propertyType: { contains: k, mode: 'insensitive' },
         })),
       });
-    } else if (propertyType && propertyType !== 'All') {
+    }
+
+    if (propertyType && propertyType !== 'All' && propertyType !== 'All Types') {
       and.push({
         propertyType: { contains: propertyType, mode: 'insensitive' },
       });
+    }
+
+    if (status) {
+      const normalized = status.replace(/\s+/g, '_').toUpperCase();
+      and.push({ status: normalized });
     }
 
     if (city) {
@@ -93,6 +106,14 @@ export class PropertiesService {
       });
     }
 
+    const sortKey = (sort || 'latest').toLowerCase();
+    const orderBy: Prisma.PropertyOrderByWithRelationInput =
+      sortKey === 'price_asc'
+        ? { price: 'asc' }
+        : sortKey === 'price_desc'
+          ? { price: 'desc' }
+          : { createdAt: 'desc' };
+
     return this.prisma.property.findMany({
       where: { AND: and },
       include: {
@@ -100,7 +121,7 @@ export class PropertiesService {
           select: { id: true, fullName: true, email: true, profileImageUrl: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
     });
   }
 

@@ -294,6 +294,277 @@ export class UsersService {
     };
   }
 
+  async getAgentAnalytics(agentId: string, daysRaw = 30) {
+    const days = Math.min(90, Math.max(7, Number(daysRaw) || 30));
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+    const prevTo = new Date(from);
+    const prevFrom = new Date(from);
+    prevFrom.setDate(prevFrom.getDate() - days);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: agentId },
+      select: {
+        id: true,
+        role: true,
+        fullName: true,
+        profileImageUrl: true,
+        agencyName: true,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.role !== UserRole.AGENT && user.role !== UserRole.ADMIN) {
+      throw new NotFoundException('Analytics are only available for agents');
+    }
+
+    const fmt = (d: Date) =>
+      d.toLocaleDateString('en-GB', { month: 'short', day: '2-digit' });
+    const periodLabel = `Last ${days} Days (${fmt(from)}–${fmt(to)})`;
+
+    const properties = await this.prisma.property.findMany({
+      where: {
+        ownerId: agentId,
+        isActive: true,
+        approvalStatus: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        title: true,
+        city: true,
+        price: true,
+        currency: true,
+        imageUrls: true,
+        createdAt: true,
+      },
+    });
+
+    const viewingInclude = {
+      user: { select: { id: true, fullName: true, profileImageUrl: true } },
+      property: {
+        select: {
+          id: true,
+          title: true,
+          city: true,
+          price: true,
+          currency: true,
+          imageUrls: true,
+        },
+      },
+    } as const;
+
+    const [viewingsCurrent, viewingsPrevious] = await Promise.all([
+      this.prisma.viewing.findMany({
+        where: {
+          property: { ownerId: agentId },
+          createdAt: { gte: from, lte: to },
+        },
+        include: viewingInclude,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.viewing.findMany({
+        where: {
+          property: { ownerId: agentId },
+          createdAt: { gte: prevFrom, lt: prevTo },
+        },
+        include: viewingInclude,
+      }),
+    ]);
+
+    const pctTrend = (current: number, previous: number) => {
+      if (previous <= 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 1000) / 10;
+    };
+
+    const isLead = (v: { status: string }) => v.status !== 'CANCELLED';
+    const isClosed = (v: { status: string }) => v.status === 'COMPLETED';
+    const isSoft = (v: { status: string }) => v.status === 'PENDING';
+
+    const leadsCurrent = viewingsCurrent.filter(isLead);
+    const leadsPrevious = viewingsPrevious.filter(isLead);
+    const closedCurrent = viewingsCurrent.filter(isClosed);
+    const closedPrevious = viewingsPrevious.filter(isClosed);
+
+    const sumDealValue = (rows: typeof viewingsCurrent) =>
+      rows.reduce((sum, v) => sum + Number(v.property?.price || 0), 0);
+
+    const totalEarnings = sumDealValue(closedCurrent);
+    const prevEarnings = sumDealValue(closedPrevious);
+    const totalPreviews = viewingsCurrent.length;
+    const conversionRate =
+      leadsCurrent.length > 0
+        ? Math.round((closedCurrent.length / leadsCurrent.length) * 1000) / 10
+        : 0;
+
+    const weeklyConversion: {
+      weekLabel: string;
+      leads: number;
+      closed: number;
+      rate: number;
+    }[] = [];
+    for (let i = 5; i >= 0; i -= 1) {
+      const weekEnd = new Date(to);
+      weekEnd.setHours(23, 59, 59, 999);
+      weekEnd.setDate(weekEnd.getDate() - i * 7);
+      const weekStart = new Date(weekEnd);
+      weekStart.setDate(weekStart.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weekRows = viewingsCurrent.filter((v) => {
+        const d = new Date(v.createdAt);
+        return d >= weekStart && d <= weekEnd;
+      });
+      const weekLeads = weekRows.filter(isLead).length;
+      const weekClosed = weekRows.filter(isClosed).length;
+      weeklyConversion.push({
+        weekLabel: `WK${6 - i}`,
+        leads: weekLeads,
+        closed: weekClosed,
+        rate:
+          weekLeads > 0
+            ? Math.round((weekClosed / weekLeads) * 1000) / 10
+            : 0,
+      });
+    }
+
+    const weeklyEarnings: { weekLabel: string; amount: number }[] = [];
+    for (let i = 3; i >= 0; i -= 1) {
+      const weekEnd = new Date(to);
+      weekEnd.setHours(23, 59, 59, 999);
+      weekEnd.setDate(weekEnd.getDate() - i * 7);
+      const weekStart = new Date(weekEnd);
+      weekStart.setDate(weekStart.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekClosed = viewingsCurrent.filter((v) => {
+        if (!isClosed(v)) return false;
+        const d = new Date(v.createdAt);
+        return d >= weekStart && d <= weekEnd;
+      });
+      weeklyEarnings.push({
+        weekLabel: `WK${4 - i}`,
+        amount: sumDealValue(weekClosed),
+      });
+    }
+
+    const propertyLeadCounts = new Map<string, number>();
+    leadsCurrent.forEach((v) => {
+      propertyLeadCounts.set(
+        v.propertyId,
+        (propertyLeadCounts.get(v.propertyId) || 0) + 1,
+      );
+    });
+
+    let topPropertyId = properties[0]?.id || null;
+    let topLeadCount = 0;
+    propertyLeadCounts.forEach((count, propertyId) => {
+      if (count > topLeadCount) {
+        topLeadCount = count;
+        topPropertyId = propertyId;
+      }
+    });
+
+    const topFromViewing = viewingsCurrent.find(
+      (v) => v.propertyId === topPropertyId,
+    )?.property;
+    const topFromList = properties.find((p) => p.id === topPropertyId);
+    const topProperty = topFromViewing || topFromList || properties[0] || null;
+
+    const topPropertyClosed = topProperty
+      ? closedCurrent.filter((v) => v.propertyId === topProperty.id).length
+      : 0;
+    const daysInPeriod = Math.max(1, days);
+    const avgDailyLeads =
+      Math.round((leadsCurrent.length / daysInPeriod) * 10) / 10;
+
+    const leadSourceMap = new Map<string, number>();
+    leadsCurrent.forEach((v) => {
+      const name = v.user?.fullName?.trim() || 'Direct';
+      leadSourceMap.set(name, (leadSourceMap.get(name) || 0) + 1);
+    });
+    const leadSources = Array.from(leadSourceMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const avgDeal =
+      closedCurrent.length > 0
+        ? Math.round(totalEarnings / closedCurrent.length)
+        : 0;
+
+    return {
+      agent: {
+        id: user.id,
+        fullName: user.fullName,
+        profileImageUrl: user.profileImageUrl,
+        agencyName: user.agencyName,
+      },
+      period: {
+        days,
+        label: periodLabel,
+        from: from.toISOString(),
+        to: to.toISOString(),
+      },
+      summary: {
+        totalEarnings,
+        totalPreviews,
+        conversionRate,
+        currency: 'GBP',
+      },
+      cards: {
+        totalLeads: {
+          value: leadsCurrent.length,
+          trend: pctTrend(leadsCurrent.length, leadsPrevious.length),
+          subLabel: `${viewingsCurrent.filter(isSoft).length} Soft`,
+        },
+        listings: {
+          value: properties.length,
+          trend: pctTrend(
+            properties.filter((p) => new Date(p.createdAt) >= from).length,
+            properties.filter((p) => {
+              const d = new Date(p.createdAt);
+              return d >= prevFrom && d < prevTo;
+            }).length,
+          ),
+          subLabel: `${properties.length} Active`,
+        },
+        viewings: {
+          value: viewingsCurrent.length,
+          trend: pctTrend(viewingsCurrent.length, viewingsPrevious.length),
+          subLabel: `${viewingsCurrent.filter((v) => v.status === 'CONFIRMED').length} Confirmed`,
+        },
+        closedDeals: {
+          value: closedCurrent.length,
+          trend: pctTrend(closedCurrent.length, closedPrevious.length),
+          subLabel: `${totalEarnings.toLocaleString('en-GB')} Earnings`,
+        },
+      },
+      weeklyConversion,
+      earningBreakdown: {
+        closedDeals: closedCurrent.length,
+        leadsHandled: leadsCurrent.length,
+        conversionRate,
+        avgDeal,
+        weeklyEarnings,
+      },
+      topListing: topProperty
+        ? {
+            property: topProperty,
+            leads: topLeadCount || leadsCurrent.length,
+            closedDeals: topPropertyClosed,
+            avgDaily: avgDailyLeads,
+            earnings: sumDealValue(
+              closedCurrent.filter((v) => v.propertyId === topProperty.id),
+            ),
+          }
+        : null,
+      leadSources,
+      topAnalyticsValue: totalEarnings,
+      earningsTrend: pctTrend(totalEarnings, prevEarnings),
+    };
+  }
+
   findOne(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
