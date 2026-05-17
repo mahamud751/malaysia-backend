@@ -104,6 +104,69 @@ export class PropertiesService {
     });
   }
 
+  /** Recently listed active properties (newest first). */
+  async findNew(limitRaw = 20, daysRaw = 30) {
+    const limit =
+      Number.isFinite(limitRaw) && limitRaw > 0
+        ? Math.min(50, Math.floor(limitRaw))
+        : 20;
+    const days =
+      Number.isFinite(daysRaw) && daysRaw > 0
+        ? Math.min(90, Math.floor(daysRaw))
+        : 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const baseInclude = {
+      owner: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          profileImageUrl: true,
+          agencyName: true,
+        },
+      },
+    } as const;
+
+    const recent = await this.prisma.property.findMany({
+      where: {
+        isActive: true,
+        approvalStatus: 'ACTIVE',
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: baseInclude,
+    });
+
+    if (recent.length >= limit) {
+      return recent;
+    }
+
+    const latest = await this.prisma.property.findMany({
+      where: {
+        isActive: true,
+        approvalStatus: 'ACTIVE',
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: baseInclude,
+    });
+
+    const seen = new Set(recent.map((p) => p.id));
+    const merged = [...recent];
+    for (const row of latest) {
+      if (!seen.has(row.id)) {
+        merged.push(row);
+        seen.add(row.id);
+      }
+      if (merged.length >= limit) break;
+    }
+    return merged;
+  }
+
   async findAllForAdmin(pageRaw: number, pageSizeRaw: number, q?: string) {
     const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
     const pageSize =

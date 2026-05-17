@@ -74,6 +74,15 @@ export class PropertiesController {
     return this.propertiesService.findByOwner(ownerId);
   }
 
+  @Get('new/listings')
+  @ApiOperation({ summary: 'Recently listed active properties (newest first)' })
+  findNew(
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('days', new DefaultValuePipe(30), ParseIntPipe) days: number,
+  ) {
+    return this.propertiesService.findNew(limit, days);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.propertiesService.findOne(id);
