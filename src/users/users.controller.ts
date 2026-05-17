@@ -61,6 +61,14 @@ export class UsersController {
     return this.usersService.findPeersForAdmin(q);
   }
 
+  @Get(':id/profile-insights')
+  @ApiOperation({
+    summary: 'Profile stats, listings, and reviews for agent or user profiles',
+  })
+  getProfileInsights(@Param('id') id: string) {
+    return this.usersService.getProfileInsights(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
