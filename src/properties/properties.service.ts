@@ -314,7 +314,7 @@ export class PropertiesService {
       }
     }
     if (!data.city) {
-      data.city = 'United Kingdom';
+      data.city = 'Malaysia';
     }
     return data;
   }
@@ -324,7 +324,7 @@ export class PropertiesService {
     return this.prisma.property.create({
       data: {
         ...(data as unknown as CreatePropertyDto),
-        city: String(data.city || 'United Kingdom'),
+        city: String(data.city || 'Malaysia'),
         price: Number(dto.price),
         ownerId,
         approvalStatus: 'PENDING',

@@ -3,7 +3,7 @@ import { IsBoolean, IsInt, IsOptional, IsString, MinLength } from 'class-validat
 import { Type } from 'class-transformer';
 
 export class UpdateAreaDto {
-  @ApiPropertyOptional({ example: 'Mirpur 12' })
+  @ApiPropertyOptional({ example: 'Bangsar' })
   @IsOptional()
   @IsString()
   @MinLength(1)
