@@ -9,6 +9,7 @@ import { ViewingsModule } from './viewings/viewings.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { SavedPropertiesModule } from './saved-properties/saved-properties.module';
 import { ChatsModule } from './chats/chats.module';
+import { AreasModule } from './areas/areas.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ChatsModule } from './chats/chats.module';
     UploadsModule,
     SavedPropertiesModule,
     ChatsModule,
+    AreasModule,
   ],
   controllers: [AppController],
 })

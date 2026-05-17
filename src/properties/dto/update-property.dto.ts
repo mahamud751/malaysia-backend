@@ -34,6 +34,23 @@ export class UpdatePropertyDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  areaId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  latitude?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  longitude?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   propertyType?: string;
 
   @ApiPropertyOptional()

@@ -19,6 +19,7 @@ type FindPropertiesQuery = {
   /** Home screen tab: Residence | Apartment | Villa | Investment */
   category?: string;
   city?: string;
+  areaId?: string;
   minPrice?: number;
   maxPrice?: number;
   bedrooms?: number;
@@ -39,6 +40,7 @@ export class PropertiesService {
       propertyType,
       category,
       city,
+      areaId,
       minPrice,
       maxPrice,
       bedrooms,
@@ -73,8 +75,15 @@ export class PropertiesService {
       and.push({ status: normalized });
     }
 
-    if (city) {
-      and.push({ city: { contains: city, mode: 'insensitive' } });
+    if (areaId) {
+      and.push({ areaId });
+    } else if (city) {
+      and.push({
+        OR: [
+          { city: { contains: city, mode: 'insensitive' } },
+          { area: { name: { contains: city, mode: 'insensitive' } } },
+        ],
+      });
     }
     if (typeof bedrooms === 'number' && Number.isFinite(bedrooms)) {
       and.push({ bedrooms: { gte: bedrooms } });
@@ -102,6 +111,7 @@ export class PropertiesService {
           { address: { contains: q, mode: 'insensitive' } },
           { city: { contains: q, mode: 'insensitive' } },
           { description: { contains: q, mode: 'insensitive' } },
+          { area: { name: { contains: q, mode: 'insensitive' } } },
         ],
       });
     }
@@ -117,6 +127,7 @@ export class PropertiesService {
     return this.prisma.property.findMany({
       where: { AND: and },
       include: {
+        area: true,
         owner: {
           select: { id: true, fullName: true, email: true, profileImageUrl: true },
         },
@@ -275,6 +286,7 @@ export class PropertiesService {
     return this.prisma.property.findUnique({
       where: { id },
       include: {
+        area: true,
         owner: {
           select: {
             id: true,
@@ -288,14 +300,36 @@ export class PropertiesService {
     });
   }
 
-  create(ownerId: string, dto: CreatePropertyDto) {
+  private async resolveLocationFields(dto: CreatePropertyDto | UpdatePropertyDto) {
+    const data: Record<string, unknown> = { ...dto };
+    if (dto.price !== undefined) {
+      data.price = Number(dto.price);
+    }
+    if (dto.areaId) {
+      const area = await this.prisma.area.findUnique({
+        where: { id: dto.areaId },
+      });
+      if (area) {
+        data.city = dto.city?.trim() || area.name;
+      }
+    }
+    if (!data.city) {
+      data.city = 'United Kingdom';
+    }
+    return data;
+  }
+
+  async create(ownerId: string, dto: CreatePropertyDto) {
+    const data = await this.resolveLocationFields(dto);
     return this.prisma.property.create({
       data: {
-        ...dto,
+        ...(data as unknown as CreatePropertyDto),
+        city: String(data.city || 'United Kingdom'),
         price: Number(dto.price),
         ownerId,
         approvalStatus: 'PENDING',
       },
+      include: { area: true },
     });
   }
 
@@ -313,8 +347,9 @@ export class PropertiesService {
       throw new ForbiddenException('You can only update your own property');
     }
 
+    const resolved = await this.resolveLocationFields(dto);
     const nextData: Prisma.PropertyUpdateInput = {
-      ...dto,
+      ...(resolved as Prisma.PropertyUpdateInput),
       ...(dto.price !== undefined ? { price: Number(dto.price) } : {}),
     };
 
