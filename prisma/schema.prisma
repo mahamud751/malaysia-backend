@@ -134,3 +134,11 @@ model SavedProperty {
   @@index([userId])
   @@index([propertyId])
 }
+
+/** Singleton row for super-admin platform & subscription settings. */
+model PlatformSettings {
+  id            String   @id @default("default")
+  monthlyFeeGbp Decimal  @default(800) @db.Decimal(12, 2)
+  settings      Json     @default("{}")
+  updatedAt     DateTime @updatedAt
+}

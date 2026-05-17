@@ -1,21 +1,106 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateAdminSettingsDto } from './dto/update-admin-settings.dto';
+
+const DEFAULT_PLATFORM_SETTINGS = {
+  platform: [
+    {
+      key: 'verify_agent_signups',
+      label: 'Verify new agent signups manually',
+      checked: true,
+      enabled: true,
+    },
+    {
+      key: 'auto_archive_listings',
+      label: 'Auto-archive flagged listings after 7 days',
+      checked: false,
+      enabled: true,
+    },
+    {
+      key: 'double_opt_in_leads',
+      label: 'Require double opt-in for new leads',
+      checked: false,
+      enabled: false,
+    },
+  ],
+  features: [
+    {
+      key: 'lead_routing',
+      label: 'Lead routing automation',
+      checked: true,
+      enabled: true,
+    },
+    {
+      key: 'listing_flagging',
+      label: 'Listing flagging',
+      checked: false,
+      enabled: true,
+    },
+    {
+      key: 'agent_status_monitoring',
+      label: 'Agent status monitoring',
+      checked: true,
+      enabled: false,
+    },
+    {
+      key: 'advanced_reporting',
+      label: 'Advanced reporting',
+      checked: true,
+      enabled: false,
+    },
+  ],
+};
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAgentsForAdmin(pageRaw: number, pageSizeRaw: number) {
+  async findAgentsForAdmin(
+    pageRaw: number,
+    pageSizeRaw: number,
+    q?: string,
+    filter?: string,
+  ) {
     const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
     const pageSize =
       Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? Math.min(100, Math.floor(pageSizeRaw)) : 10;
     const skip = (page - 1) * pageSize;
 
-    const where = { role: UserRole.AGENT };
+    const where: Prisma.UserWhereInput = { role: UserRole.AGENT };
+
+    const trimmed = q?.trim();
+    if (trimmed) {
+      where.AND = [
+        {
+          OR: [
+            { fullName: { contains: trimmed, mode: 'insensitive' } },
+            { email: { contains: trimmed, mode: 'insensitive' } },
+            { phone: { contains: trimmed, mode: 'insensitive' } },
+            { agencyName: { contains: trimmed, mode: 'insensitive' } },
+            { cityOrArea: { contains: trimmed, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
+
+    const filterKey = (filter || 'all').toLowerCase();
+    if (filterKey === 'at_risk') {
+      where.properties = {
+        none: { approvalStatus: 'ACTIVE', isActive: true },
+      };
+    } else if (filterKey === 'with_listings' || filterKey === 'listings') {
+      where.properties = {
+        some: { approvalStatus: 'ACTIVE', isActive: true },
+      };
+    }
 
     const [total, users] = await Promise.all([
       this.prisma.user.count({ where }),
@@ -39,10 +124,27 @@ export class UsersService {
           languages: true,
           specializations: true,
           createdAt: true,
-          _count: { select: { properties: true } },
+          _count: {
+            select: {
+              properties: {
+                where: { approvalStatus: 'ACTIVE', isActive: true },
+              },
+            },
+          },
         },
       }),
     ]);
+
+    const leadCounts = await Promise.all(
+      users.map((u) =>
+        this.prisma.viewing.count({
+          where: {
+            property: { ownerId: u.id },
+            status: { not: 'CANCELLED' },
+          },
+        }),
+      ),
+    );
 
     const viewingCounts = await Promise.all(
       users.map((u) =>
@@ -53,13 +155,15 @@ export class UsersService {
     );
 
     const items = users.map((u, i) => {
-      const totalProperties = u._count.properties;
+      const listingsTotal = u._count.properties;
       const { _count, ...rest } = u;
+      const atRisk = listingsTotal === 0;
       return {
         ...rest,
-        listingsTotal: totalProperties,
-        leadsTotal: totalProperties,
+        listingsTotal,
+        leadsTotal: leadCounts[i] ?? 0,
         viewingsTotal: viewingCounts[i] ?? 0,
+        agentStatus: atRisk ? 'At Risk' : 'Active',
       };
     });
 
@@ -291,6 +395,433 @@ export class UsersService {
       listedProperties: [],
       viewingProperties,
       reviews,
+    };
+  }
+
+  async getAdminDashboard(daysRaw = 30) {
+    const days = Math.min(90, Math.max(7, Number(daysRaw) || 30));
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - days);
+    const prevFrom = new Date(from);
+    prevFrom.setDate(prevFrom.getDate() - days);
+
+    const pctTrend = (current: number, previous: number) => {
+      if (previous <= 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 1000) / 10;
+    };
+
+    const [
+      usersCurrent,
+      usersPrevious,
+      agentsCurrent,
+      agentsPrevious,
+      listingsCurrent,
+      listingsPrevious,
+      totalUsers,
+      totalAgents,
+      activeListings,
+      pendingListings,
+      pendingViewings,
+      periodViewings,
+    ] = await Promise.all([
+      this.prisma.user.count({
+        where: { role: UserRole.USER, createdAt: { gte: from, lte: now } },
+      }),
+      this.prisma.user.count({
+        where: { role: UserRole.USER, createdAt: { gte: prevFrom, lt: from } },
+      }),
+      this.prisma.user.count({
+        where: { role: UserRole.AGENT, createdAt: { gte: from, lte: now } },
+      }),
+      this.prisma.user.count({
+        where: { role: UserRole.AGENT, createdAt: { gte: prevFrom, lt: from } },
+      }),
+      this.prisma.property.count({
+        where: {
+          approvalStatus: 'ACTIVE',
+          isActive: true,
+          createdAt: { gte: from, lte: now },
+        },
+      }),
+      this.prisma.property.count({
+        where: {
+          approvalStatus: 'ACTIVE',
+          isActive: true,
+          createdAt: { gte: prevFrom, lt: from },
+        },
+      }),
+      this.prisma.user.count({ where: { role: UserRole.USER } }),
+      this.prisma.user.count({ where: { role: UserRole.AGENT } }),
+      this.prisma.property.count({
+        where: { approvalStatus: 'ACTIVE', isActive: true },
+      }),
+      this.prisma.property.count({ where: { approvalStatus: 'PENDING' } }),
+      this.prisma.viewing.count({ where: { status: 'PENDING' } }),
+      this.prisma.viewing.count({
+        where: { createdAt: { gte: from, lte: now } },
+      }),
+    ]);
+
+    const agentsWithListings = await this.prisma.user.findMany({
+      where: { role: UserRole.AGENT },
+      select: {
+        id: true,
+        _count: {
+          select: {
+            properties: {
+              where: { approvalStatus: 'ACTIVE', isActive: true },
+            },
+          },
+        },
+      },
+    });
+    const atRiskAgents = agentsWithListings.filter(
+      (a) => a._count.properties === 0,
+    ).length;
+
+    const [recentProperties, recentViewings, recentUsers] = await Promise.all([
+      this.prisma.property.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          title: true,
+          city: true,
+          propertyType: true,
+          price: true,
+          currency: true,
+          imageUrls: true,
+          updatedAt: true,
+          owner: { select: { fullName: true } },
+        },
+      }),
+      this.prisma.viewing.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        include: {
+          user: { select: { fullName: true } },
+          property: {
+            select: {
+              id: true,
+              title: true,
+              city: true,
+              imageUrls: true,
+            },
+          },
+        },
+      }),
+      this.prisma.user.findMany({
+        where: { role: { in: [UserRole.USER, UserRole.AGENT] } },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          fullName: true,
+          role: true,
+          profileImageUrl: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    const activityItems = [
+      ...recentProperties.map((p) => ({
+        id: `property-${p.id}`,
+        type: 'listing',
+        title: `${p.owner?.fullName || 'Agent'} updated listing`,
+        subtitle: p.title,
+        imageUrl: p.imageUrls?.[0] || null,
+        createdAt: p.updatedAt.toISOString(),
+      })),
+      ...recentViewings.map((v) => ({
+        id: `viewing-${v.id}`,
+        type: 'lead',
+        title: `${v.user?.fullName || 'User'} booked a viewing`,
+        subtitle: v.property?.title || 'Property',
+        imageUrl: v.property?.imageUrls?.[0] || null,
+        createdAt: v.createdAt.toISOString(),
+      })),
+      ...recentUsers.map((u) => ({
+        id: `user-${u.id}`,
+        type: 'agent',
+        title: `${u.fullName} joined as ${u.role}`,
+        subtitle: 'New registration',
+        imageUrl: u.profileImageUrl,
+        createdAt: u.createdAt.toISOString(),
+      })),
+    ]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+      .slice(0, 6);
+
+    const monthBuckets: {
+      month: string;
+      start: Date;
+      end: Date;
+    }[] = [];
+    for (let i = 11; i >= 0; i -= 1) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const end = new Date(
+        now.getFullYear(),
+        now.getMonth() - i + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+      monthBuckets.push({
+        month: start.toLocaleString('en-US', { month: 'short' }),
+        start,
+        end,
+      });
+    }
+
+    const [allViewingsForChart, allUsersForChart, allPropertiesForChart] =
+      await Promise.all([
+        this.prisma.viewing.findMany({
+          where: {
+            createdAt: {
+              gte: monthBuckets[0]?.start ?? from,
+              lte: now,
+            },
+          },
+          select: { createdAt: true, status: true },
+        }),
+        this.prisma.user.findMany({
+          where: {
+            createdAt: {
+              gte: monthBuckets[0]?.start ?? from,
+              lte: now,
+            },
+          },
+          select: { createdAt: true },
+        }),
+        this.prisma.property.findMany({
+          where: {
+            createdAt: {
+              gte: monthBuckets[0]?.start ?? from,
+              lte: now,
+            },
+          },
+          select: { createdAt: true },
+        }),
+      ]);
+
+    const trafficData = monthBuckets.map((bucket) => {
+      const inMonth = (d: Date) => d >= bucket.start && d <= bucket.end;
+      const visitors = allUsersForChart.filter((u) =>
+        inMonth(new Date(u.createdAt)),
+      ).length;
+      const listingViewed = allViewingsForChart.filter((v) =>
+        inMonth(new Date(v.createdAt)),
+      ).length;
+      const inquiries = allViewingsForChart.filter(
+        (v) => v.status === 'PENDING' && inMonth(new Date(v.createdAt)),
+      ).length;
+      return {
+        month: bucket.month,
+        visitors,
+        listingViewed,
+        inquiries,
+        value: listingViewed,
+      };
+    });
+
+    const maxBar = Math.max(1, ...trafficData.map((m) => m.value));
+    const trafficChart = trafficData.map((m) => ({
+      ...m,
+      barHeight: Math.round((m.value / maxBar) * 175),
+    }));
+
+    const formatCompact = (n: number) => {
+      if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+      if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+      return String(n);
+    };
+
+    const periodVisitors = usersCurrent + agentsCurrent;
+    const prevVisitors = usersPrevious + agentsPrevious;
+
+    const [feedAgents, feedListings, feedLeads, feedReviews] =
+      await Promise.all([
+        this.prisma.user.findMany({
+          where: { role: UserRole.AGENT },
+          orderBy: { createdAt: 'desc' },
+          take: 12,
+          select: {
+            id: true,
+            fullName: true,
+            agencyName: true,
+            profileImageUrl: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.property.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 12,
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            propertyType: true,
+            price: true,
+            currency: true,
+            imageUrls: true,
+          },
+        }),
+        this.prisma.viewing.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 12,
+          include: {
+            user: { select: { fullName: true } },
+            property: {
+              select: {
+                id: true,
+                title: true,
+                city: true,
+                propertyType: true,
+                price: true,
+                currency: true,
+                imageUrls: true,
+              },
+            },
+          },
+        }),
+        this.prisma.viewing.findMany({
+          where: { notes: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          take: 12,
+          include: {
+            user: { select: { fullName: true } },
+            property: {
+              select: {
+                id: true,
+                title: true,
+                city: true,
+                propertyType: true,
+                price: true,
+                currency: true,
+                imageUrls: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+    const mapListingCard = (p: {
+      id: string;
+      title: string;
+      city: string;
+      propertyType: string | null;
+      price: unknown;
+      currency: string;
+      imageUrls: string[];
+    }) => ({
+      id: p.id,
+      name: p.title,
+      price: Number(p.price),
+      currency: p.currency || 'GBP',
+      propertyType: p.propertyType || 'Property',
+      location: p.city,
+      imageUrl: p.imageUrls?.[0] || null,
+    });
+
+    const cities = await this.prisma.property.findMany({
+      where: { isActive: true },
+      select: { city: true },
+      distinct: ['city'],
+      take: 50,
+    });
+
+    return {
+      periodDays: days,
+      recommended: [
+        {
+          label: 'Total User',
+          value: totalUsers,
+          trend: pctTrend(usersCurrent, usersPrevious),
+        },
+        {
+          label: 'Active Agent',
+          value: totalAgents,
+          trend: pctTrend(agentsCurrent, agentsPrevious),
+        },
+        {
+          label: 'Active Listings',
+          value: activeListings,
+          trend: pctTrend(listingsCurrent, listingsPrevious),
+        },
+      ],
+      attention: [
+        {
+          label: `${pendingListings} Pending Approval`,
+          color: '#F75555',
+          action: 'View',
+          screen: 'AdminListings',
+        },
+        {
+          label: `${atRiskAgents} At-Risk Agent`,
+          color: '#FFAB38',
+          action: 'View',
+          screen: 'AdminAgents',
+        },
+        {
+          label: `${pendingViewings} Unanswered Leads`,
+          color: '#4ADE80',
+          action: 'View',
+          screen: 'AdminViewings',
+        },
+      ],
+      recentActivities: activityItems,
+      traffic: {
+        chart: trafficChart,
+        visitors: formatCompact(periodVisitors),
+        listingViewed: formatCompact(periodViewings),
+        inquiries: formatCompact(pendingViewings),
+        registrationTrend: pctTrend(periodVisitors, prevVisitors),
+      },
+      feeds: {
+        agents: feedAgents.map((a) => ({
+          id: a.id,
+          name: a.fullName,
+          price: 0,
+          currency: 'GBP',
+          propertyType: a.agencyName || 'Agent',
+          location: 'Malaysia',
+          imageUrl: a.profileImageUrl,
+        })),
+        listings: feedListings.map(mapListingCard),
+        leads: feedLeads.map((v) =>
+          mapListingCard({
+            id: v.property?.id || v.id,
+            title: v.property?.title || 'Viewing request',
+            city: v.property?.city || 'Malaysia',
+            propertyType: v.property?.propertyType || 'Lead',
+            price: v.property?.price || 0,
+            currency: v.property?.currency || 'GBP',
+            imageUrls: v.property?.imageUrls || [],
+          }),
+        ),
+        reviews: feedReviews
+          .filter((v) => v.notes?.trim())
+          .map((v) =>
+            mapListingCard({
+              id: v.property?.id || v.id,
+              title: v.property?.title || 'Review',
+              city: v.property?.city || 'Malaysia',
+              propertyType: 'Review',
+              price: v.property?.price || 0,
+              currency: v.property?.currency || 'GBP',
+              imageUrls: v.property?.imageUrls || [],
+            }),
+          ),
+      },
+      totalAgents,
+      cities: cities.map((c) => c.city).filter(Boolean),
     };
   }
 
@@ -642,5 +1173,200 @@ export class UsersService {
         createdAt: true,
       },
     });
+  }
+
+  private async getOrCreatePlatformSettings() {
+    const existing = await this.prisma.platformSettings.findUnique({
+      where: { id: 'default' },
+    });
+    if (existing) return existing;
+    return this.prisma.platformSettings.create({
+      data: {
+        id: 'default',
+        monthlyFeeGbp: 800,
+        settings: DEFAULT_PLATFORM_SETTINGS as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  async getAdminSettings() {
+    const row = await this.getOrCreatePlatformSettings();
+    const json = (row.settings || {}) as {
+      platform?: typeof DEFAULT_PLATFORM_SETTINGS.platform;
+      features?: typeof DEFAULT_PLATFORM_SETTINGS.features;
+    };
+    return {
+      monthlyFeeGbp: Number(row.monthlyFeeGbp),
+      platform: json.platform?.length
+        ? json.platform
+        : DEFAULT_PLATFORM_SETTINGS.platform,
+      features: json.features?.length
+        ? json.features
+        : DEFAULT_PLATFORM_SETTINGS.features,
+    };
+  }
+
+  async updateAdminSettings(dto: UpdateAdminSettingsDto) {
+    const row = await this.getOrCreatePlatformSettings();
+    const current = (row.settings || {}) as Record<string, unknown>;
+    const nextSettings = {
+      platform:
+        dto.platform ??
+        (current.platform as typeof DEFAULT_PLATFORM_SETTINGS.platform) ??
+        DEFAULT_PLATFORM_SETTINGS.platform,
+      features:
+        dto.features ??
+        (current.features as typeof DEFAULT_PLATFORM_SETTINGS.features) ??
+        DEFAULT_PLATFORM_SETTINGS.features,
+    };
+    await this.prisma.platformSettings.update({
+      where: { id: 'default' },
+      data: {
+        ...(dto.monthlyFeeGbp != null
+          ? { monthlyFeeGbp: dto.monthlyFeeGbp }
+          : {}),
+        settings: nextSettings as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return this.getAdminSettings();
+  }
+
+  async listAdmins() {
+    return this.prisma.user.findMany({
+      where: { role: UserRole.ADMIN },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        profileImageUrl: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async searchRoleCandidates(q?: string) {
+    const trimmed = q?.trim();
+    const where: Prisma.UserWhereInput = {
+      role: { not: UserRole.ADMIN },
+    };
+    if (trimmed) {
+      where.AND = [
+        {
+          OR: [
+            { fullName: { contains: trimmed, mode: 'insensitive' } },
+            { email: { contains: trimmed, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
+    return this.prisma.user.findMany({
+      where,
+      take: 25,
+      orderBy: { fullName: 'asc' },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        profileImageUrl: true,
+      },
+    });
+  }
+
+  async promoteToAdmin(
+    actingAdminId: string,
+    opts: { userId?: string; email?: string },
+  ) {
+    let target = null as Awaited<
+      ReturnType<typeof this.prisma.user.findUnique>
+    > | null;
+    if (opts.userId) {
+      target = await this.prisma.user.findUnique({ where: { id: opts.userId } });
+    } else if (opts.email?.trim()) {
+      target = await this.prisma.user.findUnique({
+        where: { email: opts.email.trim().toLowerCase() },
+      });
+    } else {
+      throw new BadRequestException('userId or email is required');
+    }
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+    if (target.role === UserRole.ADMIN) {
+      throw new BadRequestException('User is already an admin');
+    }
+    return this.prisma.user.update({
+      where: { id: target.id },
+      data: { role: UserRole.ADMIN },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        profileImageUrl: true,
+        role: true,
+      },
+    });
+  }
+
+  async demoteAdmin(actingAdminId: string, targetUserId: string) {
+    if (actingAdminId === targetUserId) {
+      throw new BadRequestException('You cannot remove your own admin access');
+    }
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+    if (target.role !== UserRole.ADMIN) {
+      throw new BadRequestException('User is not an admin');
+    }
+    const adminCount = await this.prisma.user.count({
+      where: { role: UserRole.ADMIN },
+    });
+    if (adminCount <= 1) {
+      throw new BadRequestException('Cannot remove the last admin');
+    }
+    return this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { role: UserRole.USER },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        profileImageUrl: true,
+        role: true,
+      },
+    });
+  }
+
+  async setUserRole(
+    actingAdminId: string,
+    targetUserId: string,
+    role: UserRole,
+  ) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+    if (role === UserRole.ADMIN) {
+      return this.promoteToAdmin(actingAdminId, { userId: targetUserId });
+    }
+    if (target.role === UserRole.ADMIN) {
+      if (role === UserRole.USER) {
+        return this.demoteAdmin(actingAdminId, targetUserId);
+      }
+      const adminCount = await this.prisma.user.count({
+        where: { role: UserRole.ADMIN },
+      });
+      if (adminCount <= 1) {
+        throw new BadRequestException('Cannot change role of the last admin');
+      }
+    }
+    return this.update(targetUserId, { role });
   }
 }

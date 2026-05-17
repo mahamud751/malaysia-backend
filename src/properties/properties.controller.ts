@@ -35,8 +35,14 @@ export class PropertiesController {
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('pageSize', new DefaultValuePipe(10), ParseIntPipe) pageSize: number,
     @Query('q') q?: string,
+    @Query('approvalStatus') approvalStatus?: string,
   ) {
-    return this.propertiesService.findAllForAdmin(page, pageSize, q);
+    return this.propertiesService.findAllForAdmin(
+      page,
+      pageSize,
+      q,
+      approvalStatus,
+    );
   }
 
   @Get()

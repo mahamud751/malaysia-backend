@@ -188,7 +188,12 @@ export class PropertiesService {
     return merged;
   }
 
-  async findAllForAdmin(pageRaw: number, pageSizeRaw: number, q?: string) {
+  async findAllForAdmin(
+    pageRaw: number,
+    pageSizeRaw: number,
+    q?: string,
+    approvalStatus?: string,
+  ) {
     const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
     const pageSize =
       Number.isFinite(pageSizeRaw) && pageSizeRaw > 0
@@ -196,16 +201,23 @@ export class PropertiesService {
         : 10;
     const skip = (page - 1) * pageSize;
 
-    const where: Prisma.PropertyWhereInput = q
-      ? {
-          OR: [
-            { title: { contains: q, mode: 'insensitive' } },
-            { address: { contains: q, mode: 'insensitive' } },
-            { city: { contains: q, mode: 'insensitive' } },
-            { propertyType: { contains: q, mode: 'insensitive' } },
-          ],
-        }
-      : {};
+    const and: Prisma.PropertyWhereInput[] = [];
+    const trimmed = q?.trim();
+    if (trimmed) {
+      and.push({
+        OR: [
+          { title: { contains: trimmed, mode: 'insensitive' } },
+          { address: { contains: trimmed, mode: 'insensitive' } },
+          { city: { contains: trimmed, mode: 'insensitive' } },
+          { propertyType: { contains: trimmed, mode: 'insensitive' } },
+        ],
+      });
+    }
+    const statusKey = approvalStatus?.trim().toUpperCase();
+    if (statusKey && statusKey !== 'ALL') {
+      and.push({ approvalStatus: statusKey });
+    }
+    const where: Prisma.PropertyWhereInput = and.length ? { AND: and } : {};
 
     const [total, items] = await Promise.all([
       this.prisma.property.count({ where }),
