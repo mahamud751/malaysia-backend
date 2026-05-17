@@ -16,7 +16,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  //--------------------------------
+  //-------------------------------- Swagger Documentation --------------------------------
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Malasiya API')
     .setDescription('Backend API for app and admin operations')
