@@ -47,6 +47,12 @@ export class ViewingsController {
     return this.viewingsService.create(user.id, dto);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single viewing (client or listing owner)' })
+  findOne(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.viewingsService.findOne(id, user.id);
+  }
+
   @Patch(':id/status')
   updateStatus(
     @Param('id') id: string,

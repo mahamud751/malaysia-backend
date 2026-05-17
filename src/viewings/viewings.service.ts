@@ -144,6 +144,44 @@ export class ViewingsService {
     });
   }
 
+  async findOne(id: string, userId: string) {
+    const viewing = await this.prisma.viewing.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            profileImageUrl: true,
+          },
+        },
+        property: {
+          include: {
+            owner: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+                profileImageUrl: true,
+                agencyName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!viewing) {
+      throw new NotFoundException('Viewing not found');
+    }
+    if (viewing.userId !== userId && viewing.property.ownerId !== userId) {
+      throw new ForbiddenException('Not allowed to view this viewing');
+    }
+    return viewing;
+  }
+
   async updateStatus(id: string, userId: string, dto: UpdateViewingStatusDto) {
     const viewing = await this.prisma.viewing.findUnique({
       where: { id },
