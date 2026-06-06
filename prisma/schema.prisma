@@ -53,6 +53,8 @@ model User {
   chatThreadsAsOwner  PropertyChatThread[] @relation("ChatThreadOwner")
   chatMessages        PropertyChatMessage[]
   notifications       Notification[]
+  reviewsWritten      AgentReview[]    @relation("ReviewAuthor")
+  reviewsReceived     AgentReview[]    @relation("ReviewAgent")
 }
 
 model Notification {
@@ -112,6 +114,7 @@ model Property {
   viewings        Viewing[]
   savedProperties SavedProperty[]
   chatThreads       PropertyChatThread[]
+  agentReviews      AgentReview[]
 }
 
 model PropertyChatThread {
@@ -159,6 +162,26 @@ model Viewing {
   propertyId  String
   user        User          @relation("ViewingUser", fields: [userId], references: [id])
   property    Property      @relation(fields: [propertyId], references: [id])
+  review      AgentReview?
+}
+
+model AgentReview {
+  id         String   @id @default(cuid())
+  viewingId  String   @unique
+  reviewerId String
+  agentId    String
+  propertyId String
+  rating     Int
+  body       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  viewing    Viewing  @relation(fields: [viewingId], references: [id], onDelete: Cascade)
+  reviewer   User     @relation("ReviewAuthor", fields: [reviewerId], references: [id], onDelete: Cascade)
+  agent      User     @relation("ReviewAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, createdAt])
+  @@index([reviewerId, createdAt])
 }
 
 model SavedProperty {

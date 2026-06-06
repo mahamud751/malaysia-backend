@@ -239,6 +239,7 @@ export class UsersService {
         role: true,
         fullName: true,
         agencyName: true,
+        profileImageUrl: true,
       },
     });
     if (!user) {
@@ -285,17 +286,27 @@ export class UsersService {
         },
       });
 
-      const reviews = incomingViewings
-        .filter((v) => v.notes?.trim())
-        .map((v) => ({
-          id: v.id,
-          reviewerName: v.user?.fullName || 'Client',
-          reviewerImageUrl: v.user?.profileImageUrl || null,
-          rating: 5,
-          body: v.notes!.trim(),
-          date: v.createdAt.toISOString(),
-          propertyTitle: v.property?.title || 'Property',
-        }));
+      const reviewRows = await this.prisma.agentReview.findMany({
+        where: { agentId: profileUserId },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: {
+          reviewer: {
+            select: { fullName: true, profileImageUrl: true },
+          },
+          property: { select: { title: true } },
+        },
+      });
+
+      const reviews = reviewRows.map((r) => ({
+        id: r.id,
+        reviewerName: r.reviewer?.fullName || 'Client',
+        reviewerImageUrl: r.reviewer?.profileImageUrl || null,
+        rating: r.rating,
+        body: r.body,
+        date: r.createdAt.toISOString(),
+        propertyTitle: r.property?.title || 'Property',
+      }));
 
       const ratings = reviews.map((r) => Number(r.rating) || 5);
       const averageRating =
@@ -368,17 +379,27 @@ export class UsersService {
       owner: p!.owner,
     }));
 
-    const reviews = viewings
-      .filter((v) => v.notes?.trim())
-      .map((v) => ({
-        id: v.id,
-        reviewerName: user.fullName,
-        reviewerImageUrl: null,
-        rating: 5,
-        body: v.notes!.trim(),
-        date: (v.scheduledAt || v.createdAt).toISOString(),
-        propertyTitle: v.property?.title || 'Property',
-      }));
+    const reviewRows = await this.prisma.agentReview.findMany({
+      where: { reviewerId: profileUserId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        reviewer: {
+          select: { fullName: true, profileImageUrl: true },
+        },
+        property: { select: { title: true } },
+      },
+    });
+
+    const reviews = reviewRows.map((r) => ({
+      id: r.id,
+      reviewerName: user.fullName,
+      reviewerImageUrl: user.profileImageUrl || null,
+      rating: r.rating,
+      body: r.body,
+      date: r.createdAt.toISOString(),
+      propertyTitle: r.property?.title || 'Property',
+    }));
 
     return {
       profileRole: user.role,

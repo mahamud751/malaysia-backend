@@ -11,6 +11,7 @@ import { SavedPropertiesModule } from './saved-properties/saved-properties.modul
 import { ChatsModule } from './chats/chats.module';
 import { AreasModule } from './areas/areas.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ChatsModule,
     AreasModule,
     NotificationsModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
 })
