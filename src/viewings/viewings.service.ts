@@ -3,6 +3,7 @@ import { ViewingStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateViewingDto } from './dto/create-viewing.dto';
 import { UpdateViewingNoteDto } from './dto/update-viewing-note.dto';
+import { UpdateViewingScheduleDto } from './dto/update-viewing-schedule.dto';
 import { UpdateViewingStatusDto } from './dto/update-viewing-status.dto';
 
 @Injectable()
@@ -23,7 +24,7 @@ export class ViewingsService {
         propertyId: dto.propertyId,
         scheduledAt: new Date(dto.scheduledAt),
         notes: dto.notes,
-        status: ViewingStatus.CONFIRMED,
+        status: ViewingStatus.PENDING,
       },
       include: {
         property: {
@@ -198,6 +199,68 @@ export class ViewingsService {
     return this.prisma.viewing.update({
       where: { id },
       data: { status: dto.status },
+    });
+  }
+
+  async updateSchedule(id: string, userId: string, dto: UpdateViewingScheduleDto) {
+    const viewing = await this.prisma.viewing.findUnique({
+      where: { id },
+      include: { property: true },
+    });
+    if (!viewing) {
+      throw new NotFoundException('Viewing not found');
+    }
+
+    if (viewing.userId !== userId && viewing.property.ownerId !== userId) {
+      throw new ForbiddenException('Not allowed to update this viewing');
+    }
+
+    if (viewing.status === ViewingStatus.CANCELLED || viewing.status === ViewingStatus.COMPLETED) {
+      throw new ForbiddenException('Cannot reschedule a cancelled or completed viewing');
+    }
+
+    const nextStatus =
+      viewing.status === ViewingStatus.CONFIRMED
+        ? ViewingStatus.CONFIRMED
+        : ViewingStatus.PENDING;
+
+    return this.prisma.viewing.update({
+      where: { id },
+      data: {
+        scheduledAt: new Date(dto.scheduledAt),
+        status: nextStatus,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            role: true,
+            profileImageUrl: true,
+          },
+        },
+        property: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            city: true,
+            address: true,
+            price: true,
+            currency: true,
+            imageUrls: true,
+            videoUrls: true,
+            bedrooms: true,
+            bathrooms: true,
+            areaSqFt: true,
+            owner: {
+              select: { id: true, fullName: true, phone: true, email: true, profileImageUrl: true },
+            },
+          },
+        },
+      },
     });
   }
 

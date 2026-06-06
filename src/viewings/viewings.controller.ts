@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CreateViewingDto } from './dto/create-viewing.dto';
 import { UpdateViewingNoteDto } from './dto/update-viewing-note.dto';
+import { UpdateViewingScheduleDto } from './dto/update-viewing-schedule.dto';
 import { UpdateViewingStatusDto } from './dto/update-viewing-status.dto';
 import { ViewingsService } from './viewings.service';
 
@@ -60,6 +61,16 @@ export class ViewingsController {
     @Body() dto: UpdateViewingStatusDto,
   ) {
     return this.viewingsService.updateStatus(id, user.id, dto);
+  }
+
+  @Patch(':id/schedule')
+  @ApiOperation({ summary: 'Reschedule a viewing (client or listing owner)' })
+  updateSchedule(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Body() dto: UpdateViewingScheduleDto,
+  ) {
+    return this.viewingsService.updateSchedule(id, user.id, dto);
   }
 
   @Patch(':id/note')
