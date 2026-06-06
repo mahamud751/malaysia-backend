@@ -61,7 +61,7 @@ export class ViewingsService {
           },
         },
       },
-      orderBy: { scheduledAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
