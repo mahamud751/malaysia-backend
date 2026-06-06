@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ArrayMaxSize,
 } from 'class-validator';
 
 export class CreatePropertyDto {
@@ -106,12 +107,14 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(15)
   @IsString({ each: true })
   imageUrls?: string[];
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(5)
   @IsString({ each: true })
   videoUrls?: string[];
 
