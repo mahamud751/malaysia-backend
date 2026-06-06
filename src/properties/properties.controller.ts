@@ -86,6 +86,14 @@ export class PropertiesController {
     return this.propertiesService.findByOwner(ownerId);
   }
 
+  @Get('meta/listing-areas')
+  @ApiOperation({
+    summary: 'Distinct areas used by active approved property listings',
+  })
+  findListingAreas() {
+    return this.propertiesService.findListingAreas();
+  }
+
   @Get('new/listings')
   @ApiOperation({ summary: 'Recently listed active properties (newest first)' })
   findNew(

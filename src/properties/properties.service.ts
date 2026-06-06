@@ -136,6 +136,29 @@ export class PropertiesService {
     });
   }
 
+  /** Distinct areas linked to active approved listings (agent map selections). */
+  async findListingAreas() {
+    const rows = await this.prisma.property.findMany({
+      where: {
+        isActive: true,
+        approvalStatus: 'ACTIVE',
+        areaId: { not: null },
+        area: { isActive: true },
+      },
+      select: {
+        areaId: true,
+        area: { select: { id: true, name: true } },
+      },
+    });
+    const map = new Map<string, { id: string; name: string }>();
+    for (const row of rows) {
+      if (row.area?.id && row.area?.name) {
+        map.set(row.area.id, { id: row.area.id, name: row.area.name });
+      }
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   /** Recently listed active properties (newest first). */
   async findNew(limitRaw = 20, daysRaw = 30) {
     const limit =
