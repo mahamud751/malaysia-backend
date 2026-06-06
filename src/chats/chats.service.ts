@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const MAX_MESSAGE_LEN = 4000;
 
@@ -38,7 +39,10 @@ function inboxPreview(m: {
 
 @Injectable()
 export class ChatsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private readonly ADMIN_HUB_TITLE = '__ADMIN_MESSAGE_HUB__';
 
@@ -423,6 +427,42 @@ export class ChatsService {
       where: { id: threadId },
       data: { updatedAt: new Date() },
     });
+
+    const thread = await this.prisma.propertyChatThread.findUnique({
+      where: { id: threadId },
+      select: {
+        id: true,
+        clientId: true,
+        ownerId: true,
+        property: { select: { id: true, title: true } },
+      },
+    });
+
+    if (thread) {
+      const recipientId =
+        senderId === thread.clientId ? thread.ownerId : thread.clientId;
+      if (recipientId && recipientId !== senderId) {
+        const preview =
+          messageType === 'text'
+            ? body.slice(0, 120)
+            : messageType === 'image'
+              ? 'Sent a photo'
+              : messageType === 'voice'
+                ? 'Sent a voice message'
+                : 'Sent an attachment';
+        await this.notifications.notifyUser(recipientId, {
+          type: 'CHAT_MESSAGE',
+          title: `New message from ${msg.sender.fullName}`,
+          body: preview,
+          data: {
+            route: 'chat',
+            threadId: thread.id,
+            propertyId: thread.property.id,
+            propertyTitle: thread.property.title,
+          },
+        });
+      }
+    }
 
     return msg;
   }

@@ -20,6 +20,15 @@ enum ViewingStatus {
   COMPLETED
 }
 
+enum NotificationType {
+  VIEWING_REQUEST
+  VIEWING_STATUS
+  VIEWING_RESCHEDULE
+  CHAT_MESSAGE
+  PROPERTY_SUBMITTED
+  PROPERTY_APPROVAL
+}
+
 model User {
   id                String    @id @default(cuid())
   email             String    @unique
@@ -43,6 +52,22 @@ model User {
   chatThreadsAsClient PropertyChatThread[] @relation("ChatThreadClient")
   chatThreadsAsOwner  PropertyChatThread[] @relation("ChatThreadOwner")
   chatMessages        PropertyChatMessage[]
+  notifications       Notification[]
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 model Area {

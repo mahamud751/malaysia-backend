@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 
@@ -32,7 +33,10 @@ type FindPropertiesQuery = {
 
 @Injectable()
 export class PropertiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   findAll(query: FindPropertiesQuery = {}) {
     const {
@@ -344,7 +348,7 @@ export class PropertiesService {
 
   async create(ownerId: string, dto: CreatePropertyDto) {
     const data = await this.resolveLocationFields(dto);
-    return this.prisma.property.create({
+    const property = await this.prisma.property.create({
       data: {
         ...(data as unknown as CreatePropertyDto),
         city: String(data.city || 'Malaysia'),
@@ -354,6 +358,20 @@ export class PropertiesService {
       },
       include: { area: true },
     });
+
+    await this.notifications.notifyAdmins({
+      type: 'PROPERTY_SUBMITTED',
+      title: 'New listing submitted',
+      body: `${property.title} is waiting for approval`,
+      data: {
+        route: 'property',
+        propertyId: property.id,
+        propertyTitle: property.title,
+        status: property.approvalStatus,
+      },
+    });
+
+    return property;
   }
 
   async update(
@@ -381,10 +399,30 @@ export class PropertiesService {
       nextData.approvalStatus = 'PENDING';
     }
 
-    return this.prisma.property.update({
+    const updated = await this.prisma.property.update({
       where: { id },
       data: nextData,
     });
+
+    if (
+      !isAdmin &&
+      existing.approvalStatus !== 'PENDING' &&
+      updated.approvalStatus === 'PENDING'
+    ) {
+      await this.notifications.notifyAdmins({
+        type: 'PROPERTY_SUBMITTED',
+        title: 'Listing updated for review',
+        body: `${updated.title} was edited and needs approval`,
+        data: {
+          route: 'property',
+          propertyId: updated.id,
+          propertyTitle: updated.title,
+          status: updated.approvalStatus,
+        },
+      });
+    }
+
+    return updated;
   }
 
   async updateApprovalStatus(
@@ -401,9 +439,30 @@ export class PropertiesService {
       throw new NotFoundException('Property not found');
     }
 
-    return this.prisma.property.update({
+    const updated = await this.prisma.property.update({
       where: { id },
       data: { approvalStatus },
     });
+
+    const statusLabel =
+      approvalStatus === 'ACTIVE'
+        ? 'approved'
+        : approvalStatus === 'REJECTED'
+          ? 'rejected'
+          : 'set to pending';
+
+    await this.notifications.notifyUser(existing.ownerId, {
+      type: 'PROPERTY_APPROVAL',
+      title: 'Listing review update',
+      body: `Your listing "${existing.title}" was ${statusLabel}`,
+      data: {
+        route: 'property',
+        propertyId: existing.id,
+        propertyTitle: existing.title,
+        status: approvalStatus,
+      },
+    });
+
+    return updated;
   }
 }

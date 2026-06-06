@@ -1,14 +1,25 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ViewingStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateViewingDto } from './dto/create-viewing.dto';
 import { UpdateViewingNoteDto } from './dto/update-viewing-note.dto';
 import { UpdateViewingScheduleDto } from './dto/update-viewing-schedule.dto';
 import { UpdateViewingStatusDto } from './dto/update-viewing-status.dto';
 
+const VIEWING_STATUS_LABEL: Record<ViewingStatus, string> = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  CANCELLED: 'cancelled',
+  COMPLETED: 'completed',
+};
+
 @Injectable()
 export class ViewingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async create(userId: string, dto: CreateViewingDto) {
     const property = await this.prisma.property.findUnique({
@@ -18,7 +29,7 @@ export class ViewingsService {
       throw new NotFoundException('Property is not available for booking');
     }
 
-    return this.prisma.viewing.create({
+    const viewing = await this.prisma.viewing.create({
       data: {
         userId,
         propertyId: dto.propertyId,
@@ -34,8 +45,28 @@ export class ViewingsService {
             },
           },
         },
+        user: {
+          select: { id: true, fullName: true },
+        },
       },
     });
+
+    if (viewing.property.ownerId && viewing.property.ownerId !== userId) {
+      await this.notifications.notifyUser(viewing.property.ownerId, {
+        type: 'VIEWING_REQUEST',
+        title: 'New viewing request',
+        body: `${viewing.user.fullName} requested a viewing for ${viewing.property.title}`,
+        data: {
+          route: 'viewing',
+          viewingId: viewing.id,
+          propertyId: viewing.propertyId,
+          propertyTitle: viewing.property.title,
+          status: viewing.status,
+        },
+      });
+    }
+
+    return viewing;
   }
 
   findMy(userId: string) {
@@ -196,10 +227,44 @@ export class ViewingsService {
       throw new ForbiddenException('Not allowed to update this viewing');
     }
 
-    return this.prisma.viewing.update({
+    const updated = await this.prisma.viewing.update({
       where: { id },
       data: { status: dto.status },
+      include: {
+        property: {
+          select: {
+            id: true,
+            title: true,
+            ownerId: true,
+            owner: { select: { fullName: true } },
+          },
+        },
+        user: { select: { id: true, fullName: true } },
+      },
     });
+
+    const recipientId =
+      userId === updated.userId ? updated.property.ownerId : updated.userId;
+    if (recipientId && recipientId !== userId) {
+      const actorName =
+        userId === updated.userId
+          ? updated.user.fullName
+          : updated.property.owner?.fullName || 'Agent';
+      await this.notifications.notifyUser(recipientId, {
+        type: 'VIEWING_STATUS',
+        title: 'Viewing status updated',
+        body: `${actorName} marked your viewing for ${updated.property.title} as ${VIEWING_STATUS_LABEL[dto.status]}`,
+        data: {
+          route: 'viewing',
+          viewingId: updated.id,
+          propertyId: updated.property.id,
+          propertyTitle: updated.property.title,
+          status: dto.status,
+        },
+      });
+    }
+
+    return updated;
   }
 
   async updateSchedule(id: string, userId: string, dto: UpdateViewingScheduleDto) {
@@ -224,7 +289,7 @@ export class ViewingsService {
         ? ViewingStatus.CONFIRMED
         : ViewingStatus.PENDING;
 
-    return this.prisma.viewing.update({
+    const updated = await this.prisma.viewing.update({
       where: { id },
       data: {
         scheduledAt: new Date(dto.scheduledAt),
@@ -255,6 +320,7 @@ export class ViewingsService {
             bedrooms: true,
             bathrooms: true,
             areaSqFt: true,
+            ownerId: true,
             owner: {
               select: { id: true, fullName: true, phone: true, email: true, profileImageUrl: true },
             },
@@ -262,6 +328,29 @@ export class ViewingsService {
         },
       },
     });
+
+    const recipientId =
+      userId === updated.userId ? updated.property.ownerId : updated.userId;
+    if (recipientId && recipientId !== userId) {
+      const when = updated.scheduledAt.toLocaleString('en-GB', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+      await this.notifications.notifyUser(recipientId, {
+        type: 'VIEWING_RESCHEDULE',
+        title: 'Viewing rescheduled',
+        body: `Viewing for ${updated.property.title} was moved to ${when}`,
+        data: {
+          route: 'viewing',
+          viewingId: updated.id,
+          propertyId: updated.property.id,
+          propertyTitle: updated.property.title,
+          status: updated.status,
+        },
+      });
+    }
+
+    return updated;
   }
 
   async updateNote(id: string, userId: string, dto: UpdateViewingNoteDto) {

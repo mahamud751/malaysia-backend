@@ -10,6 +10,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { SavedPropertiesModule } from './saved-properties/saved-properties.module';
 import { ChatsModule } from './chats/chats.module';
 import { AreasModule } from './areas/areas.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AreasModule } from './areas/areas.module';
     SavedPropertiesModule,
     ChatsModule,
     AreasModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
 })
