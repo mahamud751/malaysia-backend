@@ -226,11 +226,20 @@ const PROPERTIES: PropertySeed[] = [
 ];
 
 async function seedAreas() {
+  const malaysia = await prisma.country.findUnique({ where: { code: 'MY' } });
+  if (!malaysia) {
+    throw new Error('Malaysia country not found — run countries migration first');
+  }
   const map = new Map<string, string>();
   for (const row of AREAS) {
     const area = await prisma.area.upsert({
-      where: { name: row.name },
-      create: { name: row.name, sortOrder: row.sortOrder, isActive: true },
+      where: { countryId_name: { countryId: malaysia.id, name: row.name } },
+      create: {
+        name: row.name,
+        countryId: malaysia.id,
+        sortOrder: row.sortOrder,
+        isActive: true,
+      },
       update: { sortOrder: row.sortOrder, isActive: true },
     });
     map.set(row.name, area.id);
@@ -278,6 +287,10 @@ async function seedProperties(
   ownerId: string,
   areaIds: Map<string, string>,
 ) {
+  const malaysia = await prisma.country.findUnique({ where: { code: 'MY' } });
+  if (!malaysia) {
+    throw new Error('Malaysia country not found — run countries migration first');
+  }
   await prisma.property.deleteMany({ where: { ownerId } });
 
   for (const p of PROPERTIES) {
@@ -288,6 +301,7 @@ async function seedProperties(
         description: p.description,
         city: p.areaName,
         address: p.address,
+        countryId: malaysia.id,
         areaId,
         latitude: p.latitude,
         longitude: p.longitude,

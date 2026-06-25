@@ -80,6 +80,12 @@ export class ChatsService {
       where: { ownerId: adminId, title: this.ADMIN_HUB_TITLE },
     });
     if (!hub) {
+      const malaysia = await this.prisma.country.findFirst({
+        where: { code: 'MY' },
+      });
+      if (!malaysia) {
+        throw new NotFoundException('Default country (Malaysia) not found');
+      }
       hub = await this.prisma.property.create({
         data: {
           title: this.ADMIN_HUB_TITLE,
@@ -91,6 +97,7 @@ export class ChatsService {
           currency: 'GBP',
           bedrooms: 0,
           bathrooms: 0,
+          countryId: malaysia.id,
           ownerId: adminId,
           isActive: false,
           approvalStatus: 'REJECTED',

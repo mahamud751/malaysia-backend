@@ -36,6 +36,11 @@ export class UpdatePropertyDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  countryId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   areaId?: string;
 
   @ApiPropertyOptional()
