@@ -25,6 +25,11 @@ export class CreatePropertyDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  countryId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   city?: string;
 
   @ApiProperty()

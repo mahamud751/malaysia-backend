@@ -11,32 +11,63 @@ import { UpdateAreaDto } from './dto/update-area.dto';
 export class AreasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(activeOnly = true) {
+  findAll(activeOnly = true, countryId?: string) {
     return this.prisma.area.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
+      where: {
+        ...(activeOnly ? { isActive: true } : {}),
+        ...(countryId ? { countryId } : {}),
+      },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: {
+        country: {
+          select: { id: true, name: true, code: true },
+        },
+      },
     });
   }
 
   findOne(id: string) {
-    return this.prisma.area.findUnique({ where: { id } });
+    return this.prisma.area.findUnique({
+      where: { id },
+      include: {
+        country: {
+          select: { id: true, name: true, code: true },
+        },
+      },
+    });
   }
 
   async create(dto: CreateAreaDto) {
     const name = dto.name.trim();
+    const country = await this.prisma.country.findUnique({
+      where: { id: dto.countryId },
+    });
+    if (!country) {
+      throw new NotFoundException('Country not found');
+    }
     const existing = await this.prisma.area.findFirst({
-      where: { name: { equals: name, mode: 'insensitive' } },
+      where: {
+        countryId: dto.countryId,
+        name: { equals: name, mode: 'insensitive' },
+      },
     });
     if (existing) {
-      throw new ConflictException('An area with this name already exists');
+      throw new ConflictException('An area with this name already exists in this country');
     }
     const maxSort = await this.prisma.area.aggregate({
+      where: { countryId: dto.countryId },
       _max: { sortOrder: true },
     });
     return this.prisma.area.create({
       data: {
         name,
+        countryId: dto.countryId,
         sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
+      },
+      include: {
+        country: {
+          select: { id: true, name: true, code: true },
+        },
       },
     });
   }
@@ -51,11 +82,12 @@ export class AreasService {
       const duplicate = await this.prisma.area.findFirst({
         where: {
           id: { not: id },
+          countryId: existing.countryId,
           name: { equals: name, mode: 'insensitive' },
         },
       });
       if (duplicate) {
-        throw new ConflictException('An area with this name already exists');
+        throw new ConflictException('An area with this name already exists in this country');
       }
     }
     return this.prisma.area.update({
@@ -64,6 +96,11 @@ export class AreasService {
         ...(dto.name != null ? { name: dto.name.trim() } : {}),
         ...(dto.isActive != null ? { isActive: dto.isActive } : {}),
         ...(dto.sortOrder != null ? { sortOrder: dto.sortOrder } : {}),
+      },
+      include: {
+        country: {
+          select: { id: true, name: true, code: true },
+        },
       },
     });
   }

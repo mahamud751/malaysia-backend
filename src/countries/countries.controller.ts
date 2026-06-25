@@ -14,50 +14,50 @@ import { UserRole } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { AreasService } from './areas.service';
-import { CreateAreaDto } from './dto/create-area.dto';
-import { UpdateAreaDto } from './dto/update-area.dto';
+import { CountriesService } from './countries.service';
+import { CreateCountryDto } from './dto/create-country.dto';
+import { UpdateCountryDto } from './dto/update-country.dto';
 
-@ApiTags('areas')
-@Controller('areas')
-export class AreasController {
-  constructor(private readonly areasService: AreasService) {}
+@ApiTags('countries')
+@Controller('countries')
+export class CountriesController {
+  constructor(private readonly countriesService: CountriesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List areas (active only by default)' })
-  findAll(@Query('all') all?: string, @Query('countryId') countryId?: string) {
+  @ApiOperation({ summary: 'List active countries for onboarding and filters' })
+  findAll(@Query('all') all?: string) {
     const includeInactive = all === '1' || all === 'true';
-    return this.areasService.findAll(!includeInactive, countryId);
+    return this.countriesService.findAll(!includeInactive);
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get('admin/all')
-  @ApiOperation({ summary: 'List all areas including inactive (admin)' })
-  findAllAdmin(@Query('countryId') countryId?: string) {
-    return this.areasService.findAll(false, countryId);
+  @ApiOperation({ summary: 'List all countries including inactive (admin)' })
+  findAllAdmin() {
+    return this.countriesService.findAll(false);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.areasService.findOne(id);
+    return this.countriesService.findOne(id);
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post()
-  create(@Body() dto: CreateAreaDto) {
-    return this.areasService.create(dto);
+  create(@Body() dto: CreateCountryDto) {
+    return this.countriesService.create(dto);
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateAreaDto) {
-    return this.areasService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateCountryDto) {
+    return this.countriesService.update(id, dto);
   }
 
   @ApiBearerAuth()
@@ -65,6 +65,6 @@ export class AreasController {
   @Roles(UserRole.ADMIN)
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.areasService.remove(id);
+    return this.countriesService.remove(id);
   }
 }

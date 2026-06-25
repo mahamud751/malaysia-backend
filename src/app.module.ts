@@ -10,6 +10,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { SavedPropertiesModule } from './saved-properties/saved-properties.module';
 import { ChatsModule } from './chats/chats.module';
 import { AreasModule } from './areas/areas.module';
+import { CountriesModule } from './countries/countries.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReviewsModule } from './reviews/reviews.module';
 
@@ -27,6 +28,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     SavedPropertiesModule,
     ChatsModule,
     AreasModule,
+    CountriesModule,
     NotificationsModule,
     ReviewsModule,
   ],

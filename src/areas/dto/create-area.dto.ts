@@ -6,4 +6,8 @@ export class CreateAreaDto {
   @IsString()
   @MinLength(1)
   name: string;
+
+  @ApiProperty({ description: 'Country this area belongs to' })
+  @IsString()
+  countryId: string;
 }

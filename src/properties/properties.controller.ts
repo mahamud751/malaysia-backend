@@ -52,6 +52,7 @@ export class PropertiesController {
     @Query('category') category?: string,
     @Query('city') city?: string,
     @Query('areaId') areaId?: string,
+    @Query('countryId') countryId?: string,
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
     @Query('bedrooms') bedrooms?: string,
@@ -65,6 +66,7 @@ export class PropertiesController {
       category,
       city,
       areaId,
+      countryId,
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       bedrooms: bedrooms ? Number(bedrooms) : undefined,
@@ -90,8 +92,8 @@ export class PropertiesController {
   @ApiOperation({
     summary: 'Distinct areas used by active approved property listings',
   })
-  findListingAreas() {
-    return this.propertiesService.findListingAreas();
+  findListingAreas(@Query('countryId') countryId?: string) {
+    return this.propertiesService.findListingAreas(countryId);
   }
 
   @Get('new/listings')
@@ -99,8 +101,9 @@ export class PropertiesController {
   findNew(
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('days', new DefaultValuePipe(30), ParseIntPipe) days: number,
+    @Query('countryId') countryId?: string,
   ) {
-    return this.propertiesService.findNew(limit, days);
+    return this.propertiesService.findNew(limit, days, countryId);
   }
 
   @Get(':id')

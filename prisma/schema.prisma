@@ -72,14 +72,37 @@ model Notification {
   @@index([userId, createdAt])
 }
 
+model Country {
+  id              String     @id @default(cuid())
+  name            String     @unique
+  code            String     @unique
+  subtitle        String?
+  imageUrl        String?
+  defaultCurrency String     @default("GBP")
+  mapLatitude     Float?
+  mapLongitude    Float?
+  mapZoom         Float?     @default(10)
+  isActive        Boolean    @default(true)
+  sortOrder       Int        @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  areas           Area[]
+  properties      Property[]
+}
+
 model Area {
   id         String     @id @default(cuid())
-  name       String     @unique
+  name       String
+  countryId  String
+  country    Country    @relation(fields: [countryId], references: [id], onDelete: Cascade)
   isActive   Boolean    @default(true)
   sortOrder  Int        @default(0)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   properties Property[]
+
+  @@unique([countryId, name])
+  @@index([countryId])
 }
 
 model Property {
@@ -90,6 +113,8 @@ model Property {
   address      String
   areaId       String?
   area         Area?     @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  countryId    String
+  country      Country   @relation(fields: [countryId], references: [id], onDelete: Restrict)
   latitude     Float?
   longitude    Float?
   propertyType String?
@@ -115,6 +140,8 @@ model Property {
   savedProperties SavedProperty[]
   chatThreads       PropertyChatThread[]
   agentReviews      AgentReview[]
+
+  @@index([countryId])
 }
 
 model PropertyChatThread {

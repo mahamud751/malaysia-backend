@@ -21,6 +21,7 @@ type FindPropertiesQuery = {
   category?: string;
   city?: string;
   areaId?: string;
+  countryId?: string;
   minPrice?: number;
   maxPrice?: number;
   bedrooms?: number;
@@ -45,6 +46,7 @@ export class PropertiesService {
       category,
       city,
       areaId,
+      countryId,
       minPrice,
       maxPrice,
       bedrooms,
@@ -88,6 +90,10 @@ export class PropertiesService {
           { area: { name: { contains: city, mode: 'insensitive' } } },
         ],
       });
+    }
+
+    if (countryId) {
+      and.push({ countryId });
     }
     if (typeof bedrooms === 'number' && Number.isFinite(bedrooms)) {
       and.push({ bedrooms: { gte: bedrooms } });
@@ -141,13 +147,14 @@ export class PropertiesService {
   }
 
   /** Distinct areas linked to active approved listings (agent map selections). */
-  async findListingAreas() {
+  async findListingAreas(countryId?: string) {
     const rows = await this.prisma.property.findMany({
       where: {
         isActive: true,
         approvalStatus: 'ACTIVE',
         areaId: { not: null },
         area: { isActive: true },
+        ...(countryId ? { countryId } : {}),
       },
       select: {
         areaId: true,
@@ -164,7 +171,7 @@ export class PropertiesService {
   }
 
   /** Recently listed active properties (newest first). */
-  async findNew(limitRaw = 20, daysRaw = 30) {
+  async findNew(limitRaw = 20, daysRaw = 30, countryId?: string) {
     const limit =
       Number.isFinite(limitRaw) && limitRaw > 0
         ? Math.min(50, Math.floor(limitRaw))
@@ -189,11 +196,14 @@ export class PropertiesService {
       },
     } as const;
 
+    const countryFilter = countryId ? { countryId } : {};
+
     const recent = await this.prisma.property.findMany({
       where: {
         isActive: true,
         approvalStatus: 'ACTIVE',
         createdAt: { gte: since },
+        ...countryFilter,
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -208,6 +218,7 @@ export class PropertiesService {
       where: {
         isActive: true,
         approvalStatus: 'ACTIVE',
+        ...countryFilter,
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -332,17 +343,37 @@ export class PropertiesService {
     if (dto.price !== undefined) {
       data.price = Number(dto.price);
     }
+
+    let countryId = dto.countryId;
     if (dto.areaId) {
       const area = await this.prisma.area.findUnique({
         where: { id: dto.areaId },
       });
       if (area) {
         data.city = dto.city?.trim() || area.name;
+        countryId = countryId || area.countryId;
       }
     }
-    if (!data.city) {
+
+    if (!countryId) {
+      const fallback = await this.prisma.country.findFirst({
+        where: { code: 'MY' },
+      });
+      countryId = fallback?.id;
+    }
+
+    if (countryId) {
+      data.countryId = countryId;
+      if (!data.city) {
+        const country = await this.prisma.country.findUnique({
+          where: { id: countryId },
+        });
+        data.city = country?.name || 'Malaysia';
+      }
+    } else if (!data.city) {
       data.city = 'Malaysia';
     }
+
     return data;
   }
 
@@ -352,11 +383,12 @@ export class PropertiesService {
       data: {
         ...(data as unknown as CreatePropertyDto),
         city: String(data.city || 'Malaysia'),
+        countryId: String(data.countryId),
         price: Number(dto.price),
         ownerId,
         approvalStatus: 'PENDING',
       },
-      include: { area: true },
+      include: { area: true, country: true },
     });
 
     await this.notifications.notifyAdmins({
