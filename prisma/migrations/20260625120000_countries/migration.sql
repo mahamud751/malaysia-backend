@@ -24,7 +24,7 @@ CREATE UNIQUE INDEX "Country_code_key" ON "Country"("code");
 -- Seed countries
 INSERT INTO "Country" ("id", "name", "code", "subtitle", "imageUrl", "defaultCurrency", "mapLatitude", "mapLongitude", "sortOrder", "isActive", "updatedAt")
 VALUES
-  ('seed_country_malaysia', 'Malaysia', 'MY', 'Discover properties in Malaysia', 'https://images.unsplash.com/photo-1596495578065-6e0763fa1141?q=80&w=300&auto=format&fit=crop', 'GBP', 3.139, 101.6869, 1, true, CURRENT_TIMESTAMP),
+  ('seed_country_malaysia', 'Malaysia', 'MY', 'Discover properties in Malaysia', 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=300&auto=format&fit=crop', 'GBP', 3.139, 101.6869, 1, true, CURRENT_TIMESTAMP),
   ('seed_country_portugal', 'Portugal', 'PT', 'Discover properties in Portugal', 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=300&auto=format&fit=crop', 'EUR', 38.7223, -9.1393, 2, true, CURRENT_TIMESTAMP),
   ('seed_country_dubai', 'Dubai', 'AE', 'Discover properties in Dubai', 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?q=80&w=300&auto=format&fit=crop', 'AED', 25.2048, 55.2708, 3, true, CURRENT_TIMESTAMP);
 
