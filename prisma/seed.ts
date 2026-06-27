@@ -1,86 +1,12 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import {
+  AREAS_BY_COUNTRY,
+  totalAreaSeedCount,
+} from '../src/common/seed/areas-by-country';
+import { ensureCountryAreas } from '../src/common/seed/ensure-country-areas';
 
 const prisma = new PrismaClient();
-
-const AREAS_BY_COUNTRY: Record<string, { name: string; sortOrder: number }[]> = {
-  AE: [
-    { name: 'Dubai Marina', sortOrder: 1 },
-    { name: 'Downtown Dubai', sortOrder: 2 },
-    { name: 'Palm Jumeirah', sortOrder: 3 },
-    { name: 'Business Bay', sortOrder: 4 },
-    { name: 'JBR', sortOrder: 5 },
-    { name: 'DIFC', sortOrder: 6 },
-  ],
-  ES: [
-    { name: 'Madrid', sortOrder: 1 },
-    { name: 'Barcelona', sortOrder: 2 },
-    { name: 'Valencia', sortOrder: 3 },
-    { name: 'Marbella', sortOrder: 4 },
-    { name: 'Seville', sortOrder: 5 },
-    { name: 'Malaga', sortOrder: 6 },
-  ],
-  PT: [
-    { name: 'Lisbon', sortOrder: 1 },
-    { name: 'Porto', sortOrder: 2 },
-    { name: 'Algarve', sortOrder: 3 },
-    { name: 'Cascais', sortOrder: 4 },
-    { name: 'Sintra', sortOrder: 5 },
-    { name: 'Faro', sortOrder: 6 },
-  ],
-  US: [
-    { name: 'New York', sortOrder: 1 },
-    { name: 'Los Angeles', sortOrder: 2 },
-    { name: 'Miami', sortOrder: 3 },
-    { name: 'Chicago', sortOrder: 4 },
-    { name: 'San Francisco', sortOrder: 5 },
-    { name: 'Austin', sortOrder: 6 },
-  ],
-  MY: [
-    { name: 'Mont Kiara', sortOrder: 1 },
-    { name: 'Bangsar', sortOrder: 2 },
-    { name: 'KLCC', sortOrder: 3 },
-    { name: 'Damansara Heights', sortOrder: 4 },
-    { name: 'Penang Georgetown', sortOrder: 5 },
-    { name: 'Johor Bahru', sortOrder: 6 },
-  ],
-  QA: [
-    { name: 'Doha', sortOrder: 1 },
-    { name: 'The Pearl', sortOrder: 2 },
-    { name: 'Lusail', sortOrder: 3 },
-    { name: 'West Bay', sortOrder: 4 },
-    { name: 'Al Wakrah', sortOrder: 5 },
-  ],
-  SA: [
-    { name: 'Riyadh', sortOrder: 1 },
-    { name: 'Jeddah', sortOrder: 2 },
-    { name: 'Dammam', sortOrder: 3 },
-    { name: 'Khobar', sortOrder: 4 },
-    { name: 'NEOM', sortOrder: 5 },
-  ],
-  CA: [
-    { name: 'Toronto', sortOrder: 1 },
-    { name: 'Vancouver', sortOrder: 2 },
-    { name: 'Montreal', sortOrder: 3 },
-    { name: 'Calgary', sortOrder: 4 },
-    { name: 'Ottawa', sortOrder: 5 },
-  ],
-  BD: [
-    { name: 'Dhaka', sortOrder: 1 },
-    { name: 'Gulshan', sortOrder: 2 },
-    { name: 'Chattogram', sortOrder: 3 },
-    { name: 'Sylhet', sortOrder: 4 },
-    { name: 'Banani', sortOrder: 5 },
-  ],
-  IN: [
-    { name: 'Mumbai', sortOrder: 1 },
-    { name: 'Delhi', sortOrder: 2 },
-    { name: 'Bangalore', sortOrder: 3 },
-    { name: 'Hyderabad', sortOrder: 4 },
-    { name: 'Pune', sortOrder: 5 },
-    { name: 'Goa', sortOrder: 6 },
-  ],
-};
 
 const AGENT = {
   email: 'ayon@gmail.com',
@@ -297,29 +223,15 @@ const PROPERTIES: PropertySeed[] = [
 
 async function seedAreas() {
   const map = new Map<string, string>();
-  const countries = await prisma.country.findMany({
-    where: { isActive: true },
-    orderBy: { sortOrder: 'asc' },
-  });
+  await ensureCountryAreas(prisma);
 
-  for (const country of countries) {
-    const rows = AREAS_BY_COUNTRY[country.code] || [];
-    for (const row of rows) {
-      const area = await prisma.area.upsert({
-        where: {
-          countryId_name: { countryId: country.id, name: row.name },
-        },
-        create: {
-          name: row.name,
-          countryId: country.id,
-          sortOrder: row.sortOrder,
-          isActive: true,
-        },
-        update: { sortOrder: row.sortOrder, isActive: true },
-      });
-      if (country.code === 'MY') {
-        map.set(row.name, area.id);
-      }
+  const malaysia = await prisma.country.findUnique({ where: { code: 'MY' } });
+  if (malaysia) {
+    const myAreas = await prisma.area.findMany({
+      where: { countryId: malaysia.id },
+    });
+    for (const area of myAreas) {
+      map.set(area.name, area.id);
     }
   }
 
@@ -440,7 +352,7 @@ async function seedPlatformSettings() {
 }
 
 async function main() {
-  console.log('Seeding Malaysia areas…');
+  console.log('Seeding areas for all countries…');
   const areaIds = await seedAreas();
 
   console.log('Seeding agent ayon@gmail.com…');
@@ -453,7 +365,7 @@ async function main() {
   await seedPlatformSettings();
 
   console.log('\nDone.');
-  console.log(`  Areas: ${AREAS.length}`);
+  console.log(`  Areas: ${totalAreaSeedCount()} across ${Object.keys(AREAS_BY_COUNTRY).length} countries`);
   console.log(`  Properties: ${PROPERTIES.length} (approval: ACTIVE)`);
   console.log('  Agent login: ayon@gmail.com / 123456');
 }
